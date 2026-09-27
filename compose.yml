@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_DB: prism_link
+      POSTGRES_USER: prism
+      POSTGRES_PASSWORD: prism_dev_only
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prism -d prism_link"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - prism_postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  prism_postgres:

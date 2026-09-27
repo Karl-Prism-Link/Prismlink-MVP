@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PRISM LINK</title>
+  <style>
+    :root{
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      color:#122033;
+      background:#f6f8fc;
+      --navy:#071b2d;
+      --navy-2:#0a2853;
+      --blue:#2563eb;
+      --blue-2:#1d4ed8;
+      --cyan:#00c8e8;
+      --ice:#eef8ff;
+      --line:#e5eaf2;
+      --muted:#65748b;
+      --soft:#f2f5f9;
+      --green:#16a36a;
+      --green-bg:#e9f9f0;
+      --shadow:0 8px 26px rgba(15,23,42,.055);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#fff 0,#f7f9fc 170px,#f6f8fc 100%);min-height:100vh}
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    .app-header{height:64px;background:linear-gradient(90deg,#071b2d 0%,#082b59 52%,#071b2d 100%);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px;box-shadow:0 1px 0 rgba(255,255,255,.08)}
+    .brand{display:flex;align-items:center;gap:12px;min-width:0}
+    .brand img{width:37px;height:37px;border-radius:8px;display:block;flex:0 0 auto}
+    .brand strong{font-size:1.25rem;letter-spacing:.075em;white-space:nowrap}
+    .tenant-switch{display:flex;align-items:center;gap:11px;font-size:.94rem;white-space:nowrap}
+    .tenant-avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#2d78ff,#1d4ed8);box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);font-weight:750;font-size:.78rem}
+    .tenant-chevron{opacity:.7;font-size:.8rem}
+    .page{max-width:1520px;margin:0 auto;padding:16px 32px 36px}
+    nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+    nav button{width:auto;margin:0;border:1px solid transparent;background:#f0f3f8;color:#0f172a;border-radius:8px;padding:10px 17px;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.025)}
+    nav button:hover{background:#e9eef6}
+    nav button.active{background:linear-gradient(180deg,#2d6ff1,#2563eb);border-color:#1d5ee5;color:#fff;box-shadow:0 3px 9px rgba(37,99,235,.22)}
+    nav button.secondary{background:#f0f3f8;color:#0f172a}
+    .status{display:flex;align-items:center;gap:12px;min-height:47px;padding:11px 15px;background:#f0f8ff;border:1px solid #cfe5ff;border-radius:10px;color:#235ec8;margin:0 0 16px;box-shadow:0 1px 3px rgba(37,99,235,.03)}
+    .status-dot{width:21px;height:21px;border:2px solid #26a269;border-radius:50%;display:grid;place-items:center;color:#1e9b62;font-size:.76rem;font-weight:900;background:#fff;flex:0 0 auto}
+    .hidden{display:none!important}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+    .setup-top{display:grid;grid-template-columns:minmax(330px,.78fr) minmax(560px,1.3fr);gap:18px;margin-bottom:18px}
+    .setup-bottom{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+    .integrations{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .card{background:#fff;border:1px solid #e6eaf1;border-radius:15px;padding:22px;box-shadow:var(--shadow)}
+    .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px}
+    .title-wrap{display:flex;align-items:flex-start;gap:13px;min-width:0}
+    .section-icon{width:29px;height:29px;color:#173d73;flex:0 0 auto}
+    .section-icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+    h1,h2,h3{margin-top:0}
+    h2{font-size:1.05rem;margin:1px 0 4px;line-height:1.25;color:#0d1930}
+    .card-head p{margin:0}
+    label{display:block;font-size:.76rem;color:#44536a;margin:10px 0 5px;font-weight:650}
+    input,textarea,select{width:100%;padding:9px 12px;border-radius:7px;border:1px solid #ccd5e3;background:#fff;color:#152238;outline:none;transition:border .15s,box-shadow .15s}
+    input:focus,textarea:focus,select:focus{border-color:#6d9eff;box-shadow:0 0 0 3px rgba(37,99,235,.09)}
+    input:disabled,select:disabled{background:#f3f5f8;color:#7b8798;cursor:not-allowed}
+    textarea{min-height:76px;resize:vertical;line-height:1.45}
+    button.primary,button.secondary-btn,button.outline-btn{border-radius:7px;padding:10px 15px;font-weight:750;border:1px solid transparent}
+    button.primary{background:linear-gradient(180deg,#2f70ee,#2563eb);color:#fff;box-shadow:0 3px 8px rgba(37,99,235,.17)}
+    button.primary:hover{background:#1f5fe0}
+    button.secondary-btn{background:#f1f4f8;color:#1d3458;border-color:#e1e7ef}
+    button.outline-btn{background:#fff;color:#2563eb;border-color:#7ca8ff}
+    button.compact{width:auto;margin:0;padding:8px 15px}
+    .full-button{width:100%;margin-top:14px}
+    .muted{color:var(--muted);font-size:.88rem}
+    .helper{font-size:.82rem;color:#6a778c}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+    .kpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 4px 14px rgba(15,23,42,.035)}
+    .kpi b{display:block;font-size:1.5rem;margin-top:3px}
+    .pill{display:inline-block;padding:4px 9px;border-radius:999px;background:#edf3ff;color:#2c5eb5;font-size:.75rem;font-weight:700}
+    .pill.active{background:var(--green-bg);color:#138758}
+    .pill.inactive{background:#f1f3f6;color:#6b7280}
+    table{width:100%;border-collapse:collapse;font-size:.88rem}
+    th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #e9edf3;vertical-align:top}
+    th{color:#53627a;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;font-weight:750}
+    .hours-table{width:100%;display:grid;grid-template-columns:110px 1fr 1fr 92px;align-items:center}
+    .hours-header{display:contents}
+    .hours-header>div{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:#45536b;font-weight:800;padding:0 8px 8px}
+    .hours-row{display:contents}
+    .hours-cell{padding:7px 8px;border-bottom:1px solid #edf0f4;min-width:0}
+    .hours-day{font-weight:750;color:#101a2c;padding-left:0}
+    .hours-table select{padding:8px 10px;height:39px}
+    .closed-box{display:flex;justify-content:center;align-items:center}
+    .closed-box input{width:17px;height:17px;accent-color:#2563eb}
+    .hours-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;flex-wrap:wrap}
+    .hours-actions button{width:auto;margin:0}
+    .list-head,.list-row{display:grid;align-items:center;gap:12px}
+    .service-cols{grid-template-columns:minmax(180px,1.35fr) 150px 120px}
+    .staff-cols{grid-template-columns:1fr 120px}
+    .list-head{padding:0 7px 8px;border-bottom:1px solid #e7ebf1;color:#48566d;font-size:.69rem;text-transform:uppercase;letter-spacing:.055em;font-weight:800}
+    .list-row{padding:12px 7px;border-bottom:1px solid #eef1f5;font-size:.89rem}
+    .list-row:last-child{border-bottom:0}
+    .list-name{font-weight:750;color:#0e1728}
+    .empty{padding:18px 6px;color:#748197;font-size:.88rem}
+    .card-footer{display:flex;align-items:center;gap:16px;margin-top:16px;flex-wrap:wrap}
+    .card-footer button{width:auto;margin:0}
+    .inline-editor{background:#f8fafc;border:1px solid #e5eaf1;border-radius:10px;padding:13px;margin-bottom:14px}
+    .inline-editor-grid{display:grid;grid-template-columns:1fr 150px auto;gap:10px;align-items:end}
+    .inline-editor-grid.staff{grid-template-columns:1fr auto}
+    .inline-editor label{margin-top:0}
+    .inline-editor button{width:auto;margin:0}
+    .connection-state{display:flex;align-items:center;gap:8px;margin-top:12px}
+    .connection-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8}
+    .connection-dot.ok{background:#16a36a}
+    pre{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.83rem}
+    .auth-shell{max-width:940px;margin:62px auto;padding:0 24px}
+    .auth-shell .grid{grid-template-columns:1fr 1fr}
+    @media(max-width:1050px){.setup-top,.setup-bottom,.integrations{grid-template-columns:1fr}.hours-table{grid-template-columns:88px 1fr 1fr 76px}.page{padding:16px 20px 30px}}
+    @media(max-width:700px){.app-header{padding:0 16px}.tenant-switch>span:not(.tenant-avatar){display:none}.page{padding:12px}.card{padding:16px}.kpis{grid-template-columns:repeat(2,1fr)}.hours-table{grid-template-columns:62px 1fr 1fr 58px}.hours-header>div{padding-left:4px;padding-right:4px}.hours-cell{padding:6px 4px}.service-cols{grid-template-columns:1fr 90px 82px}.inline-editor-grid,.inline-editor-grid.staff{grid-template-columns:1fr}.auth-shell{margin:25px auto}.auth-shell .grid{grid-template-columns:1fr}.brand strong{font-size:1.05rem}}
+  </style>
+</head>
+<body>
+<header class="app-header">
+  <div class="brand">
+    <img alt="PRISM LINK" src="data:image/png;base64,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" />
+    <strong>PRISM LINK</strong>
+  </div>
+  <div class="tenant-switch">
+    <span id="tenantInitials" class="tenant-avatar">PL</span>
+    <span id="tenantLabel">Salon-first MVP</span>
+    <span class="tenant-chevron">⌄</span>
+  </div>
+</header>
+
+<div id="authView" class="auth-shell">
+  <section class="grid">
+    <div class="card">
+      <h2>Create 14-day trial</h2>
+      <label>Salon name</label><input id="regSalon" value="Studio One Hair" />
+      <label>Salon URL slug</label><input id="regSlug" value="studio-one-hair" />
+      <label>Email</label><input id="regEmail" type="email" value="owner@example.com" />
+      <label>Password</label><input id="regPassword" type="password" value="ChangeMe123!" />
+      <button class="primary full-button" onclick="register()">Start trial</button>
+    </div>
+    <div class="card">
+      <h2>Sign in</h2>
+      <label>Email</label><input id="loginEmail" type="email" value="owner@example.com" />
+      <label>Password</label><input id="loginPassword" type="password" value="ChangeMe123!" />
+      <button class="primary full-button" onclick="login()">Sign in</button>
+      <p class="muted">Salon setup, bookings, calls, messages and the call simulator in one simple MVP dashboard.</p>
+    </div>
+  </section>
+</div>
+
+<div id="appView" class="page hidden">
+  <nav>
+    <button data-tab="overview" class="active" onclick="showTab('overview',this)">Overview</button>
+    <button data-tab="setup" onclick="showTab('setup',this)">Salon setup</button>
+    <button data-tab="bookings" onclick="showTab('bookings',this)">Bookings</button>
+    <button data-tab="calls" onclick="showTab('calls',this)">Calls</button>
+    <button data-tab="messages" onclick="showTab('messages',this)">Messages</button>
+    <button data-tab="simulate" onclick="showTab('simulate',this)">Call simulator</button>
+    <button class="secondary" onclick="logout()">Sign out</button>
+  </nav>
+  <div id="status" class="status"><span class="status-dot">✓</span><span id="statusText">Ready.</span></div>
+
+  <div id="overview" class="tab">
+    <div class="kpis">
+      <div class="kpi"><span class="muted">Calls</span><b id="kpiCalls">0</b></div>
+      <div class="kpi"><span class="muted">Bookings</span><b id="kpiBookings">0</b></div>
+      <div class="kpi"><span class="muted">Resolved calls</span><b id="kpiResolved">0%</b></div>
+      <div class="kpi"><span class="muted">New messages</span><b id="kpiMessages">0</b></div>
+      <div class="kpi"><span class="muted">Trial status</span><b id="kpiTrial" style="font-size:1rem">—</b></div>
+    </div>
+    <div class="card"><div class="card-head"><div><h2>Recent calls</h2><p class="muted">Latest receptionist outcomes and summaries.</p></div></div><div id="recentCalls"></div></div>
+  </div>
+
+  <div id="setup" class="tab hidden">
+    <div class="setup-top">
+      <section class="card">
+        <div class="card-head">
+          <div class="title-wrap">
+            <span class="section-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5 5 4h14l2 6.5"/><path d="M4 10.5h16V21H4z"/><path d="M8 21v-6h8v6"/><path d="M2.5 10.5c.8 1.8 3.2 1.8 4 0 .8 1.8 3.2 1.8 4 0 .8 1.8 3.2 1.8 4 0 .8 1.8 3.2 1.8 4 0 .8 1.8 3.2 1.8 4 0"/></svg></span>
+            <div><h2>Salon profile</h2></div>
+          </div>
+        </div>
+        <label>Name</label><input id="salonName" />
+        <label>Phone</label><input id="salonPhone" placeholder="021 333 3333" />
+        <label>Timezone</label>
+        <select id="salonTimezone">
+          <option value="Pacific/Auckland">Pacific/Auckland</option>
+          <option value="Pacific/Chatham">Pacific/Chatham</option>
+        </select>
+        <label>Greeting</label><textarea id="salonGreeting"></textarea>
+        <button class="primary full-button" onclick="saveSalon()">Save profile</button>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="title-wrap">
+            <span class="section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6h4"/></svg></span>
+            <div><h2>Business hours</h2><p class="muted">Set when the salon is open.</p></div>
+          </div>
+        </div>
+        <div id="hoursEditor"></div>
+        <div class="hours-actions">
+          <button class="secondary-btn" onclick="copyMondayToWeekdays()">Copy Monday to weekdays</button>
+          <button class="primary" onclick="saveHours()">Save business hours</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="setup-bottom">
+      <section class="card">
+        <div class="card-head">
+          <div class="title-wrap">
+            <span class="section-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="7" r="2.4"/><circle cx="16" cy="17" r="2.4"/><path d="m9.7 8.7 4.6 6.6M14.3 8.7 9.7 15.3"/><path d="M6.3 9.2 3 21M17.7 14.8 21 3"/></svg></span>
+            <div><h2>Services</h2><p class="muted">Manage the services offered by your salon.</p></div>
+          </div>
+          <button class="outline-btn compact" onclick="toggleAddService()">＋ Add service</button>
+        </div>
+        <div id="serviceEditor" class="inline-editor hidden">
+          <div class="inline-editor-grid">
+            <div><label>Service name</label><input id="serviceName" placeholder="Women's Cut" /></div>
+            <div><label>Duration</label><input id="serviceDuration" type="number" value="60" min="5" max="480" /></div>
+            <button class="primary" onclick="addService()">Add</button>
+          </div>
+        </div>
+        <div id="servicesList"></div>
+        <div class="card-footer">
+          <button class="secondary-btn" onclick="normaliseServiceNames()">Clean up service names</button>
+          <span class="helper">Uses standard labels for common services.</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="title-wrap">
+            <span class="section-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3.5 20c.4-4 2.4-6 5.5-6s5.1 2 5.5 6M14.8 14.5c3.6-.3 5.4 1.5 5.7 4.5"/></svg></span>
+            <div><h2>Staff members</h2><p class="muted">Add and manage your team members.</p></div>
+          </div>
+          <button class="outline-btn compact" onclick="toggleAddStaff()">＋ Add staff</button>
+        </div>
+        <div id="staffEditor" class="inline-editor hidden">
+          <div class="inline-editor-grid staff">
+            <div><label>Name</label><input id="staffName" placeholder="Alex" /></div>
+            <button class="primary" onclick="addStaff()">Add</button>
+          </div>
+        </div>
+        <div id="staffList"></div>
+      </section>
+    </div>
+
+    <div class="integrations">
+      <section class="card">
+        <div class="card-head">
+          <div class="title-wrap">
+            <span class="section-icon"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg></span>
+            <div><h2>Google Calendar</h2><p class="muted">Connect the salon calendar used for availability and appointment actions.</p></div>
+          </div>
+        </div>
+        <label>Calendar ID</label><input id="calendarId" value="primary" />
+        <div class="card-footer">
+          <button class="primary" onclick="connectGoogleCalendar()">Connect Google Calendar</button>
+          <button class="secondary-btn" onclick="disconnectCalendar()">Disconnect</button>
+        </div>
+        <div class="connection-state"><span id="calendarDot" class="connection-dot"></span><span id="calendarStatus" class="muted">Not connected.</span></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="title-wrap">
+            <span class="section-icon"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></span>
+            <div><h2>Live voice development</h2><p class="muted">Browser/WebRTC voice readiness for the current salon.</p></div>
+          </div>
+        </div>
+        <p id="voiceStatus" class="muted">Checking voice configuration…</p>
+        <p class="helper">The microphone client runs from the separate voice process. This dashboard only reports safe readiness status.</p>
+      </section>
+    </div>
+  </div>
+
+  <div id="bookings" class="tab hidden"><div class="card"><div class="card-head"><div><h2>Appointments</h2><p class="muted">Verified PRISM LINK booking records.</p></div></div><div id="appointmentsTable"></div></div></div>
+  <div id="calls" class="tab hidden"><div class="card"><div class="card-head"><div><h2>Call log and summaries</h2><p class="muted">Recent call outcomes and salon-facing summaries.</p></div></div><div id="callsTable"></div></div></div>
+
+  <div id="messages" class="tab hidden">
+    <div class="card">
+      <div class="card-head"><div><h2>Messages</h2><p class="muted">Follow-up messages taken by the receptionist.</p></div></div>
+      <div id="messagesTable"></div>
+    </div>
+    <div id="messageTranscriptCard" class="card hidden" style="margin-top:18px">
+      <div class="card-head"><div><h2>Call transcript</h2></div><button class="secondary-btn compact" onclick="closeTranscript()">Close</button></div>
+      <div id="messageTranscript"></div>
+    </div>
+  </div>
+
+  <div id="simulate" class="tab hidden">
+    <div class="grid">
+      <div class="card">
+        <div class="card-head"><div><h2>Simulate a caller</h2><p class="muted">Run the deterministic API call simulator.</p></div></div>
+        <label>Caller says</label><textarea id="simUtterance">I'd like to book an appointment</textarea>
+        <label>Caller number</label><input id="simCaller" value="0210000000" />
+        <label>Appointment ID (for reschedule/cancel)</label><input id="simAppointmentId" />
+        <label>Service</label><select id="simService"></select>
+        <label>Staff (optional)</label><select id="simStaff"></select>
+        <label>Preferred time</label><input id="simStarts" type="datetime-local" />
+        <label>Name</label><input id="simName" value="Jamie Customer" />
+        <label>Phone</label><input id="simPhone" value="0210000000" />
+        <label><input id="simConfirmed" type="checkbox" style="width:auto" /> Caller explicitly confirmed the action</label>
+        <button class="primary full-button" onclick="simulateCall()">Run simulated call</button>
+      </div>
+      <div class="card"><div class="card-head"><div><h2>Receptionist result</h2></div></div><pre id="simResult" style="white-space:pre-wrap"></pre></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let token = localStorage.getItem('prism_token') || '';
+let state = {salon:null, services:[], staff:[], hours:[], appointments:[], calls:[], messages:[]};
+function headers(){ return {'Content-Type':'application/json','Authorization':'Bearer '+token}; }
+function setStatus(message){ document.getElementById('statusText').textContent = message; }
+async function request(path, options={}){
+  const res = await fetch(path,{...options,headers:{...headers(),...(options.headers||{})}});
+  if(!res.ok){ let detail='Request failed'; try{detail=JSON.stringify(await res.json())}catch(e){} throw new Error(detail); }
+  if(res.status===204) return null; return res.json();
+}
+async function register(){
+  try{
+    const data=await request('/api/v1/auth/register',{method:'POST',body:JSON.stringify({salon_name:regSalon.value,slug:regSlug.value,email:regEmail.value,password:regPassword.value})});
+    token=data.access_token; localStorage.setItem('prism_token',token); await boot();
+  }catch(e){alert(e.message)}
+}
+async function login(){
+  try{
+    const data=await request('/api/v1/auth/login',{method:'POST',body:JSON.stringify({email:loginEmail.value,password:loginPassword.value})});
+    token=data.access_token; localStorage.setItem('prism_token',token); await boot();
+  }catch(e){alert(e.message)}
+}
+function logout(){ localStorage.removeItem('prism_token'); token=''; location.reload(); }
+function showTab(id,btn){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  document.querySelectorAll('nav button[data-tab]').forEach(x=>x.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(id==='bookings'||id==='calls'||id==='overview')refreshActivity();
+  if(id==='messages')loadMessages();
+}
+function salonInitials(name){ return (name||'PRISM LINK').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
+async function boot(){
+  if(!token) return;
+  try{
+    authView.classList.add('hidden'); appView.classList.remove('hidden');
+    await Promise.all([loadSalon(),loadServices(),loadStaff(),loadHours(),loadCalendar(),loadVoiceStatus(),refreshActivity(),loadMessages()]);
+    const params=new URLSearchParams(window.location.search);
+    const calendarResult=params.get('calendar');
+    if(calendarResult==='connected') setStatus('Google Calendar connected.');
+    else if(calendarResult==='error') setStatus('Google Calendar connection failed. Check OAuth configuration and try again.');
+    else setStatus('Salon MVP loaded and ready.');
+    if(calendarResult) history.replaceState({},document.title,window.location.pathname);
+  }catch(e){ localStorage.removeItem('prism_token'); token=''; location.reload(); }
+}
+async function loadSalon(){
+  state.salon=await request('/api/v1/salon');
+  salonName.value=state.salon.name; salonPhone.value=state.salon.phone_number||'';
+  if(!Array.from(salonTimezone.options).some(o=>o.value===state.salon.timezone)) salonTimezone.add(new Option(state.salon.timezone,state.salon.timezone));
+  salonTimezone.value=state.salon.timezone; salonGreeting.value=state.salon.greeting;
+  kpiTrial.textContent=state.salon.status+' · ends '+new Date(state.salon.trial_ends_at).toLocaleDateString();
+  tenantInitials.textContent=salonInitials(state.salon.name); tenantLabel.textContent='Salon-first MVP';
+}
+async function saveSalon(){
+  try{state.salon=await request('/api/v1/salon',{method:'PATCH',body:JSON.stringify({name:salonName.value,phone_number:salonPhone.value||null,timezone:salonTimezone.value,greeting:salonGreeting.value})});tenantInitials.textContent=salonInitials(state.salon.name);setStatus('Salon profile saved.')}catch(e){setStatus(e.message)}
+}
+const dayNames=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+function formatTimeLabel(value){
+  const [h,m]=value.split(':').map(Number); const suffix=h>=12?'PM':'AM'; const hour=(h%12)||12; return `${hour}:${String(m).padStart(2,'0')} ${suffix}`;
+}
+function timeOptions(selected){
+  let values=[]; for(let h=0;h<24;h++) for(let m of [0,30]) values.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  if(selected && !values.includes(selected)) values.push(selected);
+  return values.sort().map(v=>`<option value="${v}" ${v===selected?'selected':''}>${formatTimeLabel(v)}</option>`).join('');
+}
+function renderHours(){
+  const byDay=Object.fromEntries((state.hours||[]).map(h=>[h.day_of_week,h]));
+  hoursEditor.innerHTML=`<div class="hours-table"><div class="hours-header"><div>Day</div><div>Open</div><div>Close</div><div style="text-align:center">Closed</div></div>${dayNames.map((name,day)=>{
+    const h=byDay[day]||{day_of_week:day,opens_at:'09:00:00',closes_at:'17:00:00',is_closed:(day===6)};
+    const open=(h.opens_at||'09:00').slice(0,5), close=(h.closes_at||'17:00').slice(0,5);
+    return `<div class="hours-row">
+      <div class="hours-cell hours-day">${name.slice(0,3)}</div>
+      <div class="hours-cell"><select id="hoursOpen${day}" ${h.is_closed?'disabled':''}>${timeOptions(open)}</select></div>
+      <div class="hours-cell"><select id="hoursClose${day}" ${h.is_closed?'disabled':''}>${timeOptions(close)}</select></div>
+      <div class="hours-cell closed-box"><input aria-label="${name} closed" id="hoursClosed${day}" type="checkbox" ${h.is_closed?'checked':''} onchange="toggleHoursDay(${day})"></div>
+    </div>`;
+  }).join('')}</div>`;
+}
+function toggleHoursDay(day){
+  const closed=document.getElementById('hoursClosed'+day).checked;
+  document.getElementById('hoursOpen'+day).disabled=closed;
+  document.getElementById('hoursClose'+day).disabled=closed;
+}
+function copyMondayToWeekdays(){
+  const mondayClosed=hoursClosed0.checked; const mondayOpen=hoursOpen0.value; const mondayClose=hoursClose0.value;
+  for(let day=1;day<=4;day++){
+    document.getElementById('hoursClosed'+day).checked=mondayClosed;
+    document.getElementById('hoursOpen'+day).value=mondayOpen;
+    document.getElementById('hoursClose'+day).value=mondayClose;
+    toggleHoursDay(day);
+  }
+  setStatus('Monday hours copied to Tuesday–Friday. Save business hours to apply.');
+}
+async function loadHours(){ state.hours=await request('/api/v1/salon/hours'); renderHours(); }
+async function saveHours(){
+  try{
+    const payload=dayNames.map((_,day)=>{
+      const is_closed=document.getElementById('hoursClosed'+day).checked;
+      return {day_of_week:day,opens_at:is_closed?null:document.getElementById('hoursOpen'+day).value,closes_at:is_closed?null:document.getElementById('hoursClose'+day).value,is_closed};
+    });
+    state.hours=await request('/api/v1/salon/hours',{method:'PUT',body:JSON.stringify(payload)});
+    renderHours(); setStatus('Business hours saved.');
+  }catch(e){setStatus(e.message)}
+}
+function toggleAddService(){ serviceEditor.classList.toggle('hidden'); if(!serviceEditor.classList.contains('hidden')) serviceName.focus(); }
+function toggleAddStaff(){ staffEditor.classList.toggle('hidden'); if(!staffEditor.classList.contains('hidden')) staffName.focus(); }
+async function loadServices(){
+  state.services=await request('/api/v1/salon/services');
+  servicesList.innerHTML=state.services.length?`<div class="list-head service-cols"><div>Service name</div><div>Duration</div><div>Status</div></div>${state.services.map(s=>`<div class="list-row service-cols"><div class="list-name">${esc(s.name)}</div><div>${s.duration_minutes} min</div><div><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Active':'Inactive'}</span></div></div>`).join('')}`:'<div class="empty">No services yet.</div>';
+  simService.innerHTML='<option value="">Select service</option>'+state.services.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+}
+async function addService(){
+  try{await request('/api/v1/salon/services',{method:'POST',body:JSON.stringify({name:serviceName.value,duration_minutes:Number(serviceDuration.value)})});serviceName.value='';serviceEditor.classList.add('hidden');await loadServices();setStatus('Service added.')}catch(e){setStatus(e.message)}
+}
+async function normaliseServiceNames(){ try{state.services=await request('/api/v1/salon/services/normalise-names',{method:'POST'});await loadServices();setStatus('Common service names cleaned up.')}catch(e){setStatus(e.message)} }
+async function loadStaff(){
+  state.staff=await request('/api/v1/salon/staff');
+  staffList.innerHTML=state.staff.length?`<div class="list-head staff-cols"><div>Staff member</div><div>Status</div></div>${state.staff.map(s=>`<div class="list-row staff-cols"><div class="list-name">${esc(s.name)}</div><div><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Active':'Inactive'}</span></div></div>`).join('')}`:'<div class="empty">No staff yet.</div>';
+  simStaff.innerHTML='<option value="">Any staff</option>'+state.staff.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+}
+async function addStaff(){
+  try{await request('/api/v1/salon/staff',{method:'POST',body:JSON.stringify({name:staffName.value})});staffName.value='';staffEditor.classList.add('hidden');await loadStaff();setStatus('Staff member added.')}catch(e){setStatus(e.message)}
+}
+async function loadCalendar(){
+  const c=await request('/api/v1/calendar/status');
+  const dot=document.getElementById('calendarDot');
+  if(c){calendarStatus.textContent=`${c.account_label||'Google account'} · ${c.status} · ${c.external_calendar_id}`;dot.classList.toggle('ok',c.status==='connected');}
+  else{calendarStatus.textContent='Not connected.';dot.classList.remove('ok');}
+}
+async function loadVoiceStatus(){
+  const v=await request('/api/v1/voice/status'); const provider=(v.llm_provider||'groq'); const model=v.llm_model||'not set';
+  voiceStatus.textContent=v.browser_voice_ready?`Ready · tenant ${v.current_tenant_slug} · Deepgram configured · LLM ${provider} configured · model ${model}`:`Not ready · current tenant ${v.current_tenant_slug} · configured tenant ${v.configured_tenant_slug||'not set'} · Deepgram ${v.deepgram_configured?'configured':'missing'} · LLM ${provider} ${v.llm_configured?'configured':'missing'} · model ${model}`;
+}
+async function connectGoogleCalendar(){
+  try{const data=await request('/api/v1/calendar/google/connect?external_calendar_id='+encodeURIComponent(calendarId.value||'primary'));window.location.assign(data.authorization_url);}catch(e){setStatus(e.message)}
+}
+async function disconnectCalendar(){ try{await request('/api/v1/calendar/disconnect',{method:'POST'});await loadCalendar();setStatus('Google Calendar disconnected.')}catch(e){setStatus(e.message)} }
+async function refreshActivity(){ state.appointments=await request('/api/v1/appointments'); state.calls=await request('/api/v1/calls'); renderActivity(); }
+async function loadMessages(){ state.messages=await request('/api/v1/messages'); renderMessages(); }
+function renderActivity(){
+  kpiCalls.textContent=state.calls.length;kpiBookings.textContent=state.appointments.filter(a=>a.status!=='cancelled').length;kpiMessages.textContent=state.messages.filter(m=>m.status==='new').length;
+  const resolved=state.calls.filter(c=>['booked','appointment_changed','cancelled','enquiry_resolved','message_taken','routed'].includes(c.outcome)).length;kpiResolved.textContent=state.calls.length?Math.round(resolved/state.calls.length*100)+'%':'0%';
+  recentCalls.innerHTML=state.calls.slice(0,5).map(c=>`<p><span class="pill">${esc(c.outcome)}</span> ${new Date(c.started_at).toLocaleString()} — ${esc(c.summary?.summary_text||'No summary')}</p>`).join('')||'<p class="muted">No calls yet.</p>';
+  appointmentsTable.innerHTML=table(['Customer','Start','Status','Service ID','Appointment ID'],state.appointments.map(a=>[a.customer_name,new Date(a.starts_at).toLocaleString(),a.status,a.service_id,a.id]));
+  callsTable.innerHTML=table(['When','Caller','Outcome','Summary'],state.calls.map(c=>[new Date(c.started_at).toLocaleString(),c.caller_number||'—',c.outcome,c.summary?.summary_text||'—']));
+}
+function renderMessages(){
+  if(!state.messages.length){messagesTable.innerHTML='<p class="muted">No follow-up messages yet.</p>';kpiMessages.textContent='0';return;}
+  kpiMessages.textContent=state.messages.filter(m=>m.status==='new').length;
+  messagesTable.innerHTML=`<table><thead><tr><th>When</th><th>Caller</th><th>Callback</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody>${state.messages.map(m=>`<tr><td>${esc(new Date(m.created_at).toLocaleString())}</td><td>${esc(m.customer_name||'Caller')}</td><td>${esc(m.callback_phone||'—')}</td><td>${esc(m.message_text)}</td><td><select style="min-width:120px" onchange="updateMessageStatus('${m.id}',this.value)"><option value="new" ${m.status==='new'?'selected':''}>New</option><option value="contacted" ${m.status==='contacted'?'selected':''}>Contacted</option><option value="resolved" ${m.status==='resolved'?'selected':''}>Resolved</option></select></td><td><button class="secondary-btn compact" onclick="openTranscript('${m.id}')">Transcript</button></td></tr>`).join('')}</tbody></table>`;
+}
+async function updateMessageStatus(id,status){try{const updated=await request('/api/v1/messages/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({status})});state.messages=state.messages.map(m=>m.id===id?updated:m);renderMessages();setStatus('Message marked '+status+'.');}catch(e){setStatus(e.message);await loadMessages();}}
+async function openTranscript(id){try{const rows=await request('/api/v1/messages/'+encodeURIComponent(id)+'/transcript');messageTranscript.innerHTML=rows.length?rows.map(r=>`<p><b>${esc(r.speaker==='caller'?'Caller':'Receptionist')}</b> <span class="muted">${esc(new Date(r.created_at).toLocaleTimeString())}</span><br>${esc(r.text)}</p>`).join(''):'<p class="muted">No transcript stored for this call.</p>';messageTranscriptCard.classList.remove('hidden');}catch(e){setStatus(e.message)}}
+function closeTranscript(){messageTranscriptCard.classList.add('hidden');messageTranscript.innerHTML='';}
+function table(headers,rows){if(!rows.length)return '<p class="muted">Nothing to show yet.</p>';return `<table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(String(v??''))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;}
+async function simulateCall(){try{const body={caller_number:simCaller.value||null,utterance:simUtterance.value,appointment_id:simAppointmentId.value||null,service_id:simService.value||null,staff_member_id:simStaff.value||null,starts_at:simStarts.value?new Date(simStarts.value).toISOString():null,customer_name:simName.value||null,customer_phone:simPhone.value||null,confirmed:simConfirmed.checked};const data=await request('/api/v1/calls/simulate',{method:'POST',body:JSON.stringify(body)});simResult.textContent=JSON.stringify(data,null,2);await refreshActivity();setStatus('Simulated call completed.');}catch(e){simResult.textContent=e.message;setStatus('Simulation failed.');}}
+function esc(value){return String(value??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));}
+boot();
+</script>
+</body>
+</html>

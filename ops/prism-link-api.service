@@ -1,0 +1,26 @@
+[Unit]
+Description=PRISM LINK FastAPI service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=prismlink
+Group=prismlink
+WorkingDirectory=/opt/pipecat/prism-link-mvp
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/pipecat/prism-link-mvp/.venv/bin/python -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=20s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/pipecat/prism-link-mvp
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

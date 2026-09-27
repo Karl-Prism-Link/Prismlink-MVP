@@ -1,0 +1,12 @@
+.venv/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.env
+*.db
+*.sqlite3
+.DS_Store
+
+.secrets/
+.codex-remote-attachments/
