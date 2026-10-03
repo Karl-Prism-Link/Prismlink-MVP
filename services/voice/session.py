@@ -9,6 +9,7 @@ from sqlalchemy import select
 from database.models import Call, CallSummary, TranscriptMessage
 from database.session import DBSession
 from database.utils import utcnow
+from monitoring import record_call_finished, record_call_started
 
 
 @dataclass
@@ -326,6 +327,7 @@ class LiveCallSession:
         self.db.add(self.call)
         await self.db.commit()
         await self.db.refresh(self.call)
+        record_call_started()
         return self.call
 
     async def append_transcript(self, speaker: str, text: str) -> None:
@@ -419,4 +421,5 @@ class LiveCallSession:
 
         await self.db.commit()
         await self.db.refresh(self.call)
+        record_call_finished(resolution.outcome, self.call.duration_seconds or 0)
         return self.call

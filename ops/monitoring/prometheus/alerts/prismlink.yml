@@ -1,0 +1,91 @@
+groups:
+  - name: prism-link-availability
+    rules:
+      - alert: PrismLinkTargetDown
+        expr: up{job=~"pipecat|aurora|aurora-node|hpmicro-node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is unreachable"
+          runbook: "Check the systemd service, Tailscale path and host health dashboard."
+
+      - alert: AuroraControlApiDown
+        expr: aurora_control_api_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aurora control API is not healthy"
+          runbook: "On aurora: check prismlink-sip.service and localhost:8088. Do not expose 8088 publicly."
+
+      - alert: AuroraNativeMetricsUnavailable
+        expr: aurora_native_metrics_up == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aurora native call/RTP metrics are unavailable"
+          runbook: "The exporter is reachable but Aurora /metrics is not. Restore the local endpoint."
+
+      - alert: AuroraSipUnregistered
+        expr: aurora_sip_registered == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aurora is not registered to the SIP trunk"
+          runbook: "Check SIP credentials, registration logs, carrier reachability and firewall rules."
+
+      - alert: AuroraRtpNoFlow
+        expr: increase(aurora_rtp_no_flow_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A SIP call had no {{ $labels.direction }} RTP flow"
+          runbook: "Check RTP bind address, Azure firewall/NSG, carrier media address and port range 20000-50000."
+
+      - alert: AuroraCallbackFailureRate
+        expr: sum(rate(aurora_callback_requests_total{result=~"error|timeout"}[10m])) / clamp_min(sum(rate(aurora_callback_requests_total[10m])), 0.001) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 10% of Aurora callbacks to Pipecat are failing"
+          runbook: "Check hpmicro prism-link-api, the Tailscale route and POST /internal/sip-events logs."
+
+  - name: prism-link-hosts
+    rules:
+      - alert: HostDiskSpaceLow
+        expr: 100 * (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.host }} has less than 10% disk free"
+
+      - alert: HostMemoryPressure
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.host }} memory use is above 90%"
+
+  - name: prism-link-quality
+    rules:
+      - alert: PrismLinkHighTurnLatency
+        expr: histogram_quantile(0.95, sum(rate(voice_turn_latency_seconds_bucket[10m])) by (le)) > 2.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pipecat caller-to-response latency p95 is above 2.5 seconds"
+      - alert: PrismLinkApiErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[10m])) / clamp_min(sum(rate(http_requests_total[10m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PRISM LINK API 5xx rate is above 5%"
