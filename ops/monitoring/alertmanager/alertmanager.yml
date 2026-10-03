@@ -1,0 +1,9 @@
+route:
+  receiver: default
+  group_by: [alertname, host, service]
+  group_wait: 30s
+  group_interval: 10m
+  repeat_interval: 4h
+receivers:
+  - name: default
+    # Add a webhook, email, or other notification integration before production.

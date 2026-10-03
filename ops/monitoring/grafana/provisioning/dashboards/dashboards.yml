@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: PRISM LINK
+    folder: PRISM LINK
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

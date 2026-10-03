@@ -39,6 +39,7 @@ from apps.voice.prompt import build_voice_system_prompt
 from core.config import get_settings
 from database.repositories import TenantRepository
 from database.session import DBSession
+from monitoring import record_voice_turn_latency
 from services.service_names import configured_service_name_from_speech
 from services.voice.contact import (
     extract_booking_day_reference,
@@ -1689,6 +1690,7 @@ async def run_bot(
 
     @latency_observer.event_handler("on_latency_measured")
     async def on_latency_measured(_observer, latency: float):
+        record_voice_turn_latency(latency)
         logger.info("PRISM LINK user-to-bot latency={:.3f}s", latency)
 
     @latency_observer.event_handler("on_latency_breakdown")
