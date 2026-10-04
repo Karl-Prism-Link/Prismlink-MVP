@@ -1,6 +1,6 @@
 # PRISM LINK v0.3.14 — Groq rate-limit and voice-context optimization
 
-This increment reduces per-turn LLM token pressure and makes live voice latency measurable before SIP/FreeSWITCH work.
+This increment reduces per-turn LLM token pressure and makes live voice latency measurable before SIP integration work.
 
 ## Changes
 
