@@ -2,13 +2,11 @@
 
 ## Current guides
 
-- [Progress report — 20 September 2026](PROGRESS_REPORT_2026-09-20.md) — verified end-to-end
-  progress, current risks, and recommended next milestones.
-- [Monitoring metrics and alerting](MONITORING_METRICS.md) — production measurement plan for call
-  outcomes, voice quality, AI latency, booking integrity, reliability, privacy, and cost.
+- [Monitoring metrics and alerting](MONITORING_METRICS.md) — operational measurements for Aurora,
+  Pipecat, booking integrity, reliability, privacy, and cost.
 - [MVP and pilot status](MVP_STATUS.md) — current capability and readiness assessment.
-- [Voice and FreeSWITCH setup](VOICE_SETUP.md) — browser voice, transport configuration, and
-  real-call validation.
+- [Voice runtime setup](VOICE_SETUP.md) — browser voice configuration and validation.
+- [Aurora integration setup](AURORA_SETUP.md) — SIP/RTP integration, environment, and live-call checks.
 - [Google Calendar OAuth setup](GOOGLE_OAUTH_SETUP.md) — tenant-specific local OAuth setup.
 - [OpenRouter setup](OPENROUTER_SETUP.md) — optional development LLM provider.
 
