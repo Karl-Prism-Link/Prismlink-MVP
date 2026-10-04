@@ -1,3 +1,4 @@
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
@@ -67,6 +68,7 @@ async def create_service(
         name=canonical_service_name(payload.name),
         description=payload.description,
         duration_minutes=payload.duration_minutes,
+        price=payload.price,
         is_active=True,
         created_at=now,
         updated_at=now,
@@ -75,6 +77,21 @@ async def create_service(
     await db.commit()
     await db.refresh(service)
     return service
+
+
+@router.delete("/services/{service_id}", status_code=204)
+async def delete_service(
+    service_id: UUID,
+    auth: AuthContext = Depends(get_auth_context),
+    db: DBSession = Depends(get_db),
+) -> None:
+    """Archive a service without breaking historical or booked appointments."""
+    service = await ServiceRepository(db, auth.tenant_id).get(service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    service.is_active = False
+    service.updated_at = utcnow()
+    await db.commit()
 
 
 @router.post("/services/normalise-names", response_model=list[ServiceOut])

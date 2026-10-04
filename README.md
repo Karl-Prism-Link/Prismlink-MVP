@@ -64,7 +64,7 @@ python -m ruff format --check .
 ```
 
 The suite covers tenant isolation, booking safety and concurrency, migrations, voice state
-handling, messages, and FreeSWITCH transport isolation.
+handling, messages, FreeSWITCH transport isolation, and Aurora RTP packet/codec helpers.
 
 ## Voice and FreeSWITCH
 
@@ -88,6 +88,7 @@ python -m apps.voice.bot_freeswitch
 
 Provider keys and transport settings belong only in the ignored `.env` file. Follow the
 [voice and FreeSWITCH setup guide](docs/VOICE_SETUP.md) for configuration and live-call checks.
+For the Aurora SIP/RTP edge, follow [Aurora integration setup](docs/AURORA_SETUP.md).
 
 ## Database
 

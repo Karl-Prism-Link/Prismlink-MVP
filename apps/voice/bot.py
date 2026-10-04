@@ -228,6 +228,10 @@ async def run_bot(
 
     stt = DeepgramSTTService(
         api_key=deepgram_key,
+        encoding="linear16",
+        sample_rate=8000,
+        channels=1,
+        endpointing=300,
         settings=DeepgramSTTService.Settings(
             model=settings.deepgram_stt_model,
             language=settings.deepgram_stt_language,
