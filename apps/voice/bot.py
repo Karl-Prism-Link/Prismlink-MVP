@@ -169,7 +169,7 @@ async def run_bot(
     tenant = await tenants.by_phone_number(called_number) if called_number else None
     if tenant is not None and tenant_slug and tenant.slug != tenant_slug:
         await db.close()
-        raise RuntimeError("FreeSWITCH tenant slug does not match the called number.")
+        raise RuntimeError("Configured tenant slug does not match the called number.")
     if tenant is None:
         tenant_slug = tenant_slug or _required("VOICE_TENANT_SLUG", settings.voice_tenant_slug)
         tenant = await tenants.by_slug(tenant_slug)
