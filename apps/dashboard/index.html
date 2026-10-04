@@ -89,17 +89,23 @@
     .hours-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;flex-wrap:wrap}
     .hours-actions button{width:auto;margin:0}
     .list-head,.list-row{display:grid;align-items:center;gap:12px}
-    .service-cols{grid-template-columns:minmax(180px,1.35fr) 150px 120px}
+    .service-cols{grid-template-columns:minmax(160px,1.2fr) 110px 110px 120px 92px}
     .staff-cols{grid-template-columns:1fr 120px}
     .list-head{padding:0 7px 8px;border-bottom:1px solid #e7ebf1;color:#48566d;font-size:.69rem;text-transform:uppercase;letter-spacing:.055em;font-weight:800}
     .list-row{padding:12px 7px;border-bottom:1px solid #eef1f5;font-size:.89rem}
     .list-row:last-child{border-bottom:0}
     .list-name{font-weight:750;color:#0e1728}
     .empty{padding:18px 6px;color:#748197;font-size:.88rem}
+    .onboarding-card{margin-bottom:18px}
+    .onboarding-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px}
+    .onboarding-step{display:flex;align-items:center;gap:8px;padding:10px 11px;border:1px solid #e7ebf1;border-radius:9px;background:#fbfcfe;font-size:.87rem}
+    .onboarding-step button{margin-left:auto;padding:6px 9px;font-size:.75rem}
+    .step-dot{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#eef2f7;color:#65748b;font-weight:800;flex:0 0 auto}
+    .step-dot.done{background:var(--green-bg);color:#138758}
     .card-footer{display:flex;align-items:center;gap:16px;margin-top:16px;flex-wrap:wrap}
     .card-footer button{width:auto;margin:0}
     .inline-editor{background:#f8fafc;border:1px solid #e5eaf1;border-radius:10px;padding:13px;margin-bottom:14px}
-    .inline-editor-grid{display:grid;grid-template-columns:1fr 150px auto;gap:10px;align-items:end}
+    .inline-editor-grid{display:grid;grid-template-columns:1fr 130px 130px auto;gap:10px;align-items:end}
     .inline-editor-grid.staff{grid-template-columns:1fr auto}
     .inline-editor label{margin-top:0}
     .inline-editor button{width:auto;margin:0}
@@ -110,7 +116,7 @@
     .auth-shell{max-width:940px;margin:62px auto;padding:0 24px}
     .auth-shell .grid{grid-template-columns:1fr 1fr}
     @media(max-width:1050px){.setup-top,.setup-bottom,.integrations{grid-template-columns:1fr}.hours-table{grid-template-columns:88px 1fr 1fr 76px}.page{padding:16px 20px 30px}}
-    @media(max-width:700px){.app-header{padding:0 16px}.tenant-switch>span:not(.tenant-avatar){display:none}.page{padding:12px}.card{padding:16px}.kpis{grid-template-columns:repeat(2,1fr)}.hours-table{grid-template-columns:62px 1fr 1fr 58px}.hours-header>div{padding-left:4px;padding-right:4px}.hours-cell{padding:6px 4px}.service-cols{grid-template-columns:1fr 90px 82px}.inline-editor-grid,.inline-editor-grid.staff{grid-template-columns:1fr}.auth-shell{margin:25px auto}.auth-shell .grid{grid-template-columns:1fr}.brand strong{font-size:1.05rem}}
+    @media(max-width:700px){.app-header{padding:0 16px}.tenant-switch>span:not(.tenant-avatar){display:none}.page{padding:12px}.card{padding:16px}.kpis{grid-template-columns:repeat(2,1fr)}.hours-table{grid-template-columns:62px 1fr 1fr 58px}.hours-header>div{padding-left:4px;padding-right:4px}.hours-cell{padding:6px 4px}.service-cols{grid-template-columns:1fr 78px 78px 82px 58px}.inline-editor-grid,.inline-editor-grid.staff{grid-template-columns:1fr}.auth-shell{margin:25px auto}.auth-shell .grid{grid-template-columns:1fr}.brand strong{font-size:1.05rem}}
   </style>
 </head>
 <body>
@@ -169,7 +175,7 @@
     <div class="card"><div class="card-head"><div><h2>Recent calls</h2><p class="muted">Latest receptionist outcomes and summaries.</p></div></div><div id="recentCalls"></div></div>
   </div>
 
-  <div id="setup" class="tab hidden">
+  <div id="setup" class="tab hidden"><div id="onboardingCard" class="card onboarding-card"><div class="card-head"><div><h2>Setup checklist</h2><p class="muted">Complete these steps so your receptionist has everything it needs.</p></div><span id="onboardingProgress" class="pill">0%</span></div><div id="onboardingSteps" class="onboarding-steps"></div></div>
     <div class="setup-top">
       <section class="card">
         <div class="card-head">
@@ -216,7 +222,7 @@
         <div id="serviceEditor" class="inline-editor hidden">
           <div class="inline-editor-grid">
             <div><label>Service name</label><input id="serviceName" placeholder="Women's Cut" /></div>
-            <div><label>Duration</label><input id="serviceDuration" type="number" value="60" min="5" max="480" /></div>
+            <div><label>Duration (minutes)</label><input id="serviceDuration" type="number" value="60" min="5" max="480" /></div><div><label>Price (NZD)</label><input id="servicePrice" type="number" min="0" max="100000" step="1" placeholder="e.g. 65" /></div>
             <button class="primary" onclick="addService()">Add</button>
           </div>
         </div>
@@ -350,6 +356,7 @@ async function boot(){
     if(calendarResult==='connected') setStatus('Google Calendar connected.');
     else if(calendarResult==='error') setStatus('Google Calendar connection failed. Check OAuth configuration and try again.');
     else setStatus('Salon MVP loaded and ready.');
+    renderOnboarding();
     if(calendarResult) history.replaceState({},document.title,window.location.pathname);
   }catch(e){ localStorage.removeItem('prism_token'); token=''; location.reload(); }
 }
@@ -412,11 +419,67 @@ async function saveHours(){
     renderHours(); setStatus('Business hours saved.');
   }catch(e){setStatus(e.message)}
 }
+function renderOnboarding(){const checks=[['Salon profile',!!(state.salon&&state.salon.name&&state.salon.greeting&&state.salon.timezone)],['Business hours',state.hours.some(h=>!h.is_closed)],['Services',state.services.some(s=>s.is_active)],['Team',state.staff.some(s=>s.is_active)],['Google Calendar',!!state.calendarConnected]];const done=checks.filter(x=>x[1]).length;onboardingProgress.textContent=Math.round(done/checks.length*100)+'%';onboardingSteps.innerHTML=checks.map(x=>'<div class="onboarding-step"><span class="step-dot '+(x[1]?'done':'')+'">'+(x[1]?'✓':'○')+'</span><span>'+x[0]+'</span></div>').join('')}
 function toggleAddService(){ serviceEditor.classList.toggle('hidden'); if(!serviceEditor.classList.contains('hidden')) serviceName.focus(); }
 function toggleAddStaff(){ staffEditor.classList.toggle('hidden'); if(!staffEditor.classList.contains('hidden')) staffName.focus(); }
 async function loadServices(){
   state.services=await request('/api/v1/salon/services');
-  servicesList.innerHTML=state.services.length?`<div class="list-head service-cols"><div>Service name</div><div>Duration</div><div>Status</div></div>${state.services.map(s=>`<div class="list-row service-cols"><div class="list-name">${esc(s.name)}</div><div>${s.duration_minutes} min</div><div><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Active':'Inactive'}</span></div></div>`).join('')}`:'<div class="empty">No services yet.</div>';
+  renderOnboarding();
+  servicesList.innerHTML=state.services.length?`<div class="list-head service-cols"><div>Service</div><div>Duration</div><div>Price</div><div>Status</div><div></div></div>${state.services.map(s=>`<div class="list-row service-cols"><div class="list-name">${esc(s.name)}</div><div>${s.duration_minutes} min</div><div>${s.price==null?'—':'.join('')}`:'<div class="empty">No services yet.</div>';
+  simService.innerHTML='<option value="">Select service</option>'+state.services.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+}
+async function addService(){
+  try{await request('/api/v1/salon/services',{method:'POST',body:JSON.stringify({name:serviceName.value,duration_minutes:Number(serviceDuration.value),price:servicePrice.value===""?null:Number(servicePrice.value)})});serviceName.value='';servicePrice.value='';serviceEditor.classList.add('hidden');await loadServices();setStatus('Service added.')}catch(e){setStatus(e.message)}
+}
+async function deleteService(id,name){if(!confirm('Archive "'+name+'"? Existing appointments stay intact.'))return;try{await request('/api/v1/salon/services/'+encodeURIComponent(id),{method:'DELETE'});await loadServices();setStatus('Service archived.')}catch(e){setStatus(e.message)}}
+async function normaliseServiceNames(){ try{state.services=await request('/api/v1/salon/services/normalise-names',{method:'POST'});await loadServices();setStatus('Common service names cleaned up.')}catch(e){setStatus(e.message)} }
+async function loadStaff(){
+  state.staff=await request('/api/v1/salon/staff');
+  staffList.innerHTML=state.staff.length?`<div class="list-head staff-cols"><div>Staff member</div><div>Status</div></div>${state.staff.map(s=>`<div class="list-row staff-cols"><div class="list-name">${esc(s.name)}</div><div><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Active':'Inactive'}</span></div></div>`).join('')}`:'<div class="empty">No staff yet.</div>';
+  simStaff.innerHTML='<option value="">Any staff</option>'+state.staff.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+}
+async function addStaff(){
+  try{await request('/api/v1/salon/staff',{method:'POST',body:JSON.stringify({name:staffName.value})});staffName.value='';staffEditor.classList.add('hidden');await loadStaff();setStatus('Staff member added.')}catch(e){setStatus(e.message)}
+}
+async function loadCalendar(){
+  const c=await request('/api/v1/calendar/status');
+  const dot=document.getElementById('calendarDot');
+  state.calendarConnected=!!c;if(c){calendarStatus.textContent=`${c.account_label||'Google account'} · ${c.status} · ${c.external_calendar_id}`;dot.classList.toggle('ok',c.status==='connected');}
+  else{state.calendarConnected=false;calendarStatus.textContent='Not connected.';dot.classList.remove('ok');} renderOnboarding();
+}
+async function loadVoiceStatus(){
+  const v=await request('/api/v1/voice/status'); const provider=(v.llm_provider||'groq'); const model=v.llm_model||'not set';
+  voiceStatus.textContent=v.browser_voice_ready?`Ready · tenant ${v.current_tenant_slug} · Deepgram configured · LLM ${provider} configured · model ${model}`:`Not ready · current tenant ${v.current_tenant_slug} · configured tenant ${v.configured_tenant_slug||'not set'} · Deepgram ${v.deepgram_configured?'configured':'missing'} · LLM ${provider} ${v.llm_configured?'configured':'missing'} · model ${model}`;
+}
+async function connectGoogleCalendar(){
+  try{const data=await request('/api/v1/calendar/google/connect?external_calendar_id='+encodeURIComponent(calendarId.value||'primary'));window.location.assign(data.authorization_url);}catch(e){setStatus(e.message)}
+}
+async function disconnectCalendar(){ try{await request('/api/v1/calendar/disconnect',{method:'POST'});await loadCalendar();setStatus('Google Calendar disconnected.')}catch(e){setStatus(e.message)} }
+async function refreshActivity(){ state.appointments=await request('/api/v1/appointments'); state.calls=await request('/api/v1/calls'); renderActivity(); }
+async function loadMessages(){ state.messages=await request('/api/v1/messages'); renderMessages(); }
+function renderActivity(){
+  kpiCalls.textContent=state.calls.length;kpiBookings.textContent=state.appointments.filter(a=>a.status!=='cancelled').length;kpiMessages.textContent=state.messages.filter(m=>m.status==='new').length;
+  const resolved=state.calls.filter(c=>['booked','appointment_changed','cancelled','enquiry_resolved','message_taken','routed'].includes(c.outcome)).length;kpiResolved.textContent=state.calls.length?Math.round(resolved/state.calls.length*100)+'%':'0%';
+  recentCalls.innerHTML=state.calls.slice(0,5).map(c=>`<p><span class="pill">${esc(c.outcome)}</span> ${new Date(c.started_at).toLocaleString()} — ${esc(c.summary?.summary_text||'No summary')}</p>`).join('')||'<p class="muted">No calls yet.</p>';
+  appointmentsTable.innerHTML=table(['Customer','Start','Status','Service ID','Appointment ID'],state.appointments.map(a=>[a.customer_name,new Date(a.starts_at).toLocaleString(),a.status,a.service_id,a.id]));
+  callsTable.innerHTML=table(['When','Caller','Outcome','Summary'],state.calls.map(c=>[new Date(c.started_at).toLocaleString(),c.caller_number||'—',c.outcome,c.summary?.summary_text||'—']));
+}
+function renderMessages(){
+  if(!state.messages.length){messagesTable.innerHTML='<p class="muted">No follow-up messages yet.</p>';kpiMessages.textContent='0';return;}
+  kpiMessages.textContent=state.messages.filter(m=>m.status==='new').length;
+  messagesTable.innerHTML=`<table><thead><tr><th>When</th><th>Caller</th><th>Callback</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody>${state.messages.map(m=>`<tr><td>${esc(new Date(m.created_at).toLocaleString())}</td><td>${esc(m.customer_name||'Caller')}</td><td>${esc(m.callback_phone||'—')}</td><td>${esc(m.message_text)}</td><td><select style="min-width:120px" onchange="updateMessageStatus('${m.id}',this.value)"><option value="new" ${m.status==='new'?'selected':''}>New</option><option value="contacted" ${m.status==='contacted'?'selected':''}>Contacted</option><option value="resolved" ${m.status==='resolved'?'selected':''}>Resolved</option></select></td><td><button class="secondary-btn compact" onclick="openTranscript('${m.id}')">Transcript</button></td></tr>`).join('')}</tbody></table>`;
+}
+async function updateMessageStatus(id,status){try{const updated=await request('/api/v1/messages/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({status})});state.messages=state.messages.map(m=>m.id===id?updated:m);renderMessages();setStatus('Message marked '+status+'.');}catch(e){setStatus(e.message);await loadMessages();}}
+async function openTranscript(id){try{const rows=await request('/api/v1/messages/'+encodeURIComponent(id)+'/transcript');messageTranscript.innerHTML=rows.length?rows.map(r=>`<p><b>${esc(r.speaker==='caller'?'Caller':'Receptionist')}</b> <span class="muted">${esc(new Date(r.created_at).toLocaleTimeString())}</span><br>${esc(r.text)}</p>`).join(''):'<p class="muted">No transcript stored for this call.</p>';messageTranscriptCard.classList.remove('hidden');}catch(e){setStatus(e.message)}}
+function closeTranscript(){messageTranscriptCard.classList.add('hidden');messageTranscript.innerHTML='';}
+function table(headers,rows){if(!rows.length)return '<p class="muted">Nothing to show yet.</p>';return `<table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(String(v??''))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;}
+async function simulateCall(){try{const body={caller_number:simCaller.value||null,utterance:simUtterance.value,appointment_id:simAppointmentId.value||null,service_id:simService.value||null,staff_member_id:simStaff.value||null,starts_at:simStarts.value?new Date(simStarts.value).toISOString():null,customer_name:simName.value||null,customer_phone:simPhone.value||null,confirmed:simConfirmed.checked};const data=await request('/api/v1/calls/simulate',{method:'POST',body:JSON.stringify(body)});simResult.textContent=JSON.stringify(data,null,2);await refreshActivity();setStatus('Simulated call completed.');}catch(e){simResult.textContent=e.message;setStatus('Simulation failed.');}}
+function esc(value){return String(value??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));}
+boot();
+</script>
+</body>
+</html>
+ + Number(s.price).toFixed(0)}</div><div><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Active':'Archived'}</span></div><div>${s.is_active?`<button class="secondary-btn compact" onclick="deleteService('${s.id}','${esc(s.name)}')">Delete</button>`:''}</div></div>`).join('')}`:'<div class="empty">No services yet.</div>';
   simService.innerHTML='<option value="">Select service</option>'+state.services.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
 }
 async function addService(){
