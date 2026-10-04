@@ -51,6 +51,7 @@ class ServiceCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     description: str | None = Field(default=None, max_length=1000)
     duration_minutes: int = Field(ge=5, le=480)
+    price: int | None = Field(default=None, ge=0, le=100000)
 
 
 class ServiceOut(APIModel):
@@ -58,6 +59,7 @@ class ServiceOut(APIModel):
     name: str
     description: str | None
     duration_minutes: int
+    price: int | None
     is_active: bool
 
 
