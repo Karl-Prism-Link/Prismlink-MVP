@@ -6,7 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from apps.api.middleware import RequestLoggingMiddleware
-from apps.api.routes import appointments, auth, calendar, calls, health, messages, salon, voice
+from apps.api.routes import (
+    appointments,
+    aurora,
+    auth,
+    calendar,
+    calls,
+    health,
+    messages,
+    salon,
+    voice,
+)
 from core.config import get_settings, validate_runtime_settings
 from database.models import Base
 from database.session import engine
@@ -48,6 +58,7 @@ app.include_router(appointments.router)
 app.include_router(calls.router)
 app.include_router(messages.router)
 app.include_router(voice.router)
+app.include_router(aurora.router)
 
 
 @app.get("/", include_in_schema=False)

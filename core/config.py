@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     record_calls: bool = False
 
+    # Local Aurora SIP control and RTP bridge. Keep the webhook/control API on
+    # loopback; AURORA_RTP_HOST is Aurora's configured local_ip (not external_ip).
+    aurora_control_api_url: str = "http://127.0.0.1:8088"
+    aurora_control_api_token: str | None = None
+    # Aurora's local_ip is the RTP destination; bind the Pipecat UDP socket to loopback.
+    aurora_rtp_host: str | None = None
+    aurora_rtp_bind_host: str = "127.0.0.1"
+    aurora_startup_timeout_seconds: float = 20.0
+    aurora_max_active_calls: int = 8
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

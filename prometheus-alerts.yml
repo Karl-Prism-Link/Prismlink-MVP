@@ -1,0 +1,35 @@
+groups:
+  - name: prism_link_alerts
+    interval: 30s
+    rules:
+      - alert: CallFailureRate
+        expr: |
+          (rate(calls_completed_total[5m]) / rate(calls_started_total[5m])) < 0.9
+          or
+          increase(calls_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Call failure rate above threshold"
+          description: "Check API logs and Deepgram/Groq connectivity."
+
+      - alert: PipelineLatencyHigh
+        expr: |
+          histogram_quantile(0.95, rate(stg_latency_seconds_bucket[5m])) > 2.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pipeline response time exceeds 2.5s"
+          description: "Check which stage is slow (STT, Router, LLM, TTS)."
+
+      - alert: DatabaseError
+        expr: |
+          increase(db_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database errors detected"
+          description: "Check SQLite connectivity and disk space."
