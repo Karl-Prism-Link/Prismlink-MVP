@@ -425,7 +425,14 @@ function toggleAddStaff(){ staffEditor.classList.toggle('hidden'); if(!staffEdit
 async function loadServices(){
   state.services=await request('/api/v1/salon/services');
   renderOnboarding();
-  servicesList.innerHTML=state.services.length?`<div class="list-head service-cols"><div>Service</div><div>Duration</div><div>Price</div><div>Status</div><div></div></div>${state.services.map(s=>`<div class="list-row service-cols"><div class="list-name">${esc(s.name)}</div><div>${s.duration_minutes} min</div><div>${s.price==null?'—':'.join('')}`:'<div class="empty">No services yet.</div>';
+  servicesList.innerHTML = state.services.length
+    ? `<div class='list-head service-cols'><div>Service</div><div>Duration</div><div>Price</div><div>Status</div><div></div></div>` + state.services.map(s =>
+      `<div class='list-row service-cols'><div class='list-name'>${esc(s.name)}</div><div>${s.duration_minutes} min</div><div>${s.price == null ? '—' : `NZ$${Number(s.price).toFixed(0)}`}</div><div><span class='pill ${s.is_active ? 'active' : 'inactive'}'>${s.is_active ? 'Active' : 'Archived'}</span></div><div>${s.is_active ? `<button class='secondary-btn compact' data-delete-service='${esc(s.id)}' data-service-name='${esc(s.name)}'>Delete</button>` : ''}</div></div>`
+    ).join('')
+    : `<div class='empty'>No services yet.</div>`;
+  servicesList.querySelectorAll('[data-delete-service]').forEach(button => {
+    button.addEventListener('click', () => deleteService(button.dataset.deleteService, button.dataset.serviceName));
+  });
   simService.innerHTML='<option value="">Select service</option>'+state.services.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
 }
 async function addService(){
@@ -446,59 +453,6 @@ async function loadCalendar(){
   const dot=document.getElementById('calendarDot');
   state.calendarConnected=!!c;if(c){calendarStatus.textContent=`${c.account_label||'Google account'} · ${c.status} · ${c.external_calendar_id}`;dot.classList.toggle('ok',c.status==='connected');}
   else{state.calendarConnected=false;calendarStatus.textContent='Not connected.';dot.classList.remove('ok');} renderOnboarding();
-}
-async function loadVoiceStatus(){
-  const v=await request('/api/v1/voice/status'); const provider=(v.llm_provider||'groq'); const model=v.llm_model||'not set';
-  voiceStatus.textContent=v.browser_voice_ready?`Ready · tenant ${v.current_tenant_slug} · Deepgram configured · LLM ${provider} configured · model ${model}`:`Not ready · current tenant ${v.current_tenant_slug} · configured tenant ${v.configured_tenant_slug||'not set'} · Deepgram ${v.deepgram_configured?'configured':'missing'} · LLM ${provider} ${v.llm_configured?'configured':'missing'} · model ${model}`;
-}
-async function connectGoogleCalendar(){
-  try{const data=await request('/api/v1/calendar/google/connect?external_calendar_id='+encodeURIComponent(calendarId.value||'primary'));window.location.assign(data.authorization_url);}catch(e){setStatus(e.message)}
-}
-async function disconnectCalendar(){ try{await request('/api/v1/calendar/disconnect',{method:'POST'});await loadCalendar();setStatus('Google Calendar disconnected.')}catch(e){setStatus(e.message)} }
-async function refreshActivity(){ state.appointments=await request('/api/v1/appointments'); state.calls=await request('/api/v1/calls'); renderActivity(); }
-async function loadMessages(){ state.messages=await request('/api/v1/messages'); renderMessages(); }
-function renderActivity(){
-  kpiCalls.textContent=state.calls.length;kpiBookings.textContent=state.appointments.filter(a=>a.status!=='cancelled').length;kpiMessages.textContent=state.messages.filter(m=>m.status==='new').length;
-  const resolved=state.calls.filter(c=>['booked','appointment_changed','cancelled','enquiry_resolved','message_taken','routed'].includes(c.outcome)).length;kpiResolved.textContent=state.calls.length?Math.round(resolved/state.calls.length*100)+'%':'0%';
-  recentCalls.innerHTML=state.calls.slice(0,5).map(c=>`<p><span class="pill">${esc(c.outcome)}</span> ${new Date(c.started_at).toLocaleString()} — ${esc(c.summary?.summary_text||'No summary')}</p>`).join('')||'<p class="muted">No calls yet.</p>';
-  appointmentsTable.innerHTML=table(['Customer','Start','Status','Service ID','Appointment ID'],state.appointments.map(a=>[a.customer_name,new Date(a.starts_at).toLocaleString(),a.status,a.service_id,a.id]));
-  callsTable.innerHTML=table(['When','Caller','Outcome','Summary'],state.calls.map(c=>[new Date(c.started_at).toLocaleString(),c.caller_number||'—',c.outcome,c.summary?.summary_text||'—']));
-}
-function renderMessages(){
-  if(!state.messages.length){messagesTable.innerHTML='<p class="muted">No follow-up messages yet.</p>';kpiMessages.textContent='0';return;}
-  kpiMessages.textContent=state.messages.filter(m=>m.status==='new').length;
-  messagesTable.innerHTML=`<table><thead><tr><th>When</th><th>Caller</th><th>Callback</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody>${state.messages.map(m=>`<tr><td>${esc(new Date(m.created_at).toLocaleString())}</td><td>${esc(m.customer_name||'Caller')}</td><td>${esc(m.callback_phone||'—')}</td><td>${esc(m.message_text)}</td><td><select style="min-width:120px" onchange="updateMessageStatus('${m.id}',this.value)"><option value="new" ${m.status==='new'?'selected':''}>New</option><option value="contacted" ${m.status==='contacted'?'selected':''}>Contacted</option><option value="resolved" ${m.status==='resolved'?'selected':''}>Resolved</option></select></td><td><button class="secondary-btn compact" onclick="openTranscript('${m.id}')">Transcript</button></td></tr>`).join('')}</tbody></table>`;
-}
-async function updateMessageStatus(id,status){try{const updated=await request('/api/v1/messages/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({status})});state.messages=state.messages.map(m=>m.id===id?updated:m);renderMessages();setStatus('Message marked '+status+'.');}catch(e){setStatus(e.message);await loadMessages();}}
-async function openTranscript(id){try{const rows=await request('/api/v1/messages/'+encodeURIComponent(id)+'/transcript');messageTranscript.innerHTML=rows.length?rows.map(r=>`<p><b>${esc(r.speaker==='caller'?'Caller':'Receptionist')}</b> <span class="muted">${esc(new Date(r.created_at).toLocaleTimeString())}</span><br>${esc(r.text)}</p>`).join(''):'<p class="muted">No transcript stored for this call.</p>';messageTranscriptCard.classList.remove('hidden');}catch(e){setStatus(e.message)}}
-function closeTranscript(){messageTranscriptCard.classList.add('hidden');messageTranscript.innerHTML='';}
-function table(headers,rows){if(!rows.length)return '<p class="muted">Nothing to show yet.</p>';return `<table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(String(v??''))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;}
-async function simulateCall(){try{const body={caller_number:simCaller.value||null,utterance:simUtterance.value,appointment_id:simAppointmentId.value||null,service_id:simService.value||null,staff_member_id:simStaff.value||null,starts_at:simStarts.value?new Date(simStarts.value).toISOString():null,customer_name:simName.value||null,customer_phone:simPhone.value||null,confirmed:simConfirmed.checked};const data=await request('/api/v1/calls/simulate',{method:'POST',body:JSON.stringify(body)});simResult.textContent=JSON.stringify(data,null,2);await refreshActivity();setStatus('Simulated call completed.');}catch(e){simResult.textContent=e.message;setStatus('Simulation failed.');}}
-function esc(value){return String(value??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));}
-boot();
-</script>
-</body>
-</html>
- + Number(s.price).toFixed(0)}</div><div><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Active':'Archived'}</span></div><div>${s.is_active?`<button class="secondary-btn compact" onclick="deleteService('${s.id}','${esc(s.name)}')">Delete</button>`:''}</div></div>`).join('')}`:'<div class="empty">No services yet.</div>';
-  simService.innerHTML='<option value="">Select service</option>'+state.services.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
-}
-async function addService(){
-  try{await request('/api/v1/salon/services',{method:'POST',body:JSON.stringify({name:serviceName.value,duration_minutes:Number(serviceDuration.value)})});serviceName.value='';serviceEditor.classList.add('hidden');await loadServices();setStatus('Service added.')}catch(e){setStatus(e.message)}
-}
-async function normaliseServiceNames(){ try{state.services=await request('/api/v1/salon/services/normalise-names',{method:'POST'});await loadServices();setStatus('Common service names cleaned up.')}catch(e){setStatus(e.message)} }
-async function loadStaff(){
-  state.staff=await request('/api/v1/salon/staff');
-  staffList.innerHTML=state.staff.length?`<div class="list-head staff-cols"><div>Staff member</div><div>Status</div></div>${state.staff.map(s=>`<div class="list-row staff-cols"><div class="list-name">${esc(s.name)}</div><div><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Active':'Inactive'}</span></div></div>`).join('')}`:'<div class="empty">No staff yet.</div>';
-  simStaff.innerHTML='<option value="">Any staff</option>'+state.staff.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
-}
-async function addStaff(){
-  try{await request('/api/v1/salon/staff',{method:'POST',body:JSON.stringify({name:staffName.value})});staffName.value='';staffEditor.classList.add('hidden');await loadStaff();setStatus('Staff member added.')}catch(e){setStatus(e.message)}
-}
-async function loadCalendar(){
-  const c=await request('/api/v1/calendar/status');
-  const dot=document.getElementById('calendarDot');
-  if(c){calendarStatus.textContent=`${c.account_label||'Google account'} · ${c.status} · ${c.external_calendar_id}`;dot.classList.toggle('ok',c.status==='connected');}
-  else{calendarStatus.textContent='Not connected.';dot.classList.remove('ok');}
 }
 async function loadVoiceStatus(){
   const v=await request('/api/v1/voice/status'); const provider=(v.llm_provider||'groq'); const model=v.llm_model||'not set';
