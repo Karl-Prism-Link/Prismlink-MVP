@@ -96,6 +96,12 @@
     .list-row:last-child{border-bottom:0}
     .list-name{font-weight:750;color:#0e1728}
     .empty{padding:18px 6px;color:#748197;font-size:.88rem}
+    .onboarding-card{margin-bottom:18px}
+    .onboarding-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px}
+    .onboarding-step{display:flex;align-items:center;gap:8px;padding:10px 11px;border:1px solid #e7ebf1;border-radius:9px;background:#fbfcfe;font-size:.87rem}
+    .onboarding-step button{margin-left:auto;padding:6px 9px;font-size:.75rem}
+    .step-dot{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#eef2f7;color:#65748b;font-weight:800;flex:0 0 auto}
+    .step-dot.done{background:var(--green-bg);color:#138758}
     .card-footer{display:flex;align-items:center;gap:16px;margin-top:16px;flex-wrap:wrap}
     .card-footer button{width:auto;margin:0}
     .inline-editor{background:#f8fafc;border:1px solid #e5eaf1;border-radius:10px;padding:13px;margin-bottom:14px}
@@ -169,7 +175,7 @@
     <div class="card"><div class="card-head"><div><h2>Recent calls</h2><p class="muted">Latest receptionist outcomes and summaries.</p></div></div><div id="recentCalls"></div></div>
   </div>
 
-  <div id="setup" class="tab hidden">
+  <div id="setup" class="tab hidden"><div id="onboardingCard" class="card onboarding-card"><div class="card-head"><div><h2>Setup checklist</h2><p class="muted">Complete these steps so your receptionist has everything it needs.</p></div><span id="onboardingProgress" class="pill">0%</span></div><div id="onboardingSteps" class="onboarding-steps"></div></div>
     <div class="setup-top">
       <section class="card">
         <div class="card-head">
@@ -350,6 +356,7 @@ async function boot(){
     if(calendarResult==='connected') setStatus('Google Calendar connected.');
     else if(calendarResult==='error') setStatus('Google Calendar connection failed. Check OAuth configuration and try again.');
     else setStatus('Salon MVP loaded and ready.');
+    renderOnboarding();
     if(calendarResult) history.replaceState({},document.title,window.location.pathname);
   }catch(e){ localStorage.removeItem('prism_token'); token=''; location.reload(); }
 }
@@ -412,10 +419,12 @@ async function saveHours(){
     renderHours(); setStatus('Business hours saved.');
   }catch(e){setStatus(e.message)}
 }
+function renderOnboarding(){const checks=[['Salon profile',!!(state.salon&&state.salon.name&&state.salon.greeting&&state.salon.timezone)],['Business hours',state.hours.some(h=>!h.is_closed)],['Services',state.services.some(s=>s.is_active)],['Team',state.staff.some(s=>s.is_active)],['Google Calendar',!!state.calendarConnected]];const done=checks.filter(x=>x[1]).length;onboardingProgress.textContent=Math.round(done/checks.length*100)+'%';onboardingSteps.innerHTML=checks.map(x=>'<div class="onboarding-step"><span class="step-dot '+(x[1]?'done':'')+'">'+(x[1]?'✓':'○')+'</span><span>'+x[0]+'</span></div>').join('')}
 function toggleAddService(){ serviceEditor.classList.toggle('hidden'); if(!serviceEditor.classList.contains('hidden')) serviceName.focus(); }
 function toggleAddStaff(){ staffEditor.classList.toggle('hidden'); if(!staffEditor.classList.contains('hidden')) staffName.focus(); }
 async function loadServices(){
   state.services=await request('/api/v1/salon/services');
+  renderOnboarding();
   servicesList.innerHTML=state.services.length?`<div class="list-head service-cols"><div>Service</div><div>Duration</div><div>Price</div><div>Status</div><div></div></div>${state.services.map(s=>`<div class="list-row service-cols"><div class="list-name">${esc(s.name)}</div><div>${s.duration_minutes} min</div><div>${s.price==null?'—':'.join('')}`:'<div class="empty">No services yet.</div>';
   simService.innerHTML='<option value="">Select service</option>'+state.services.filter(s=>s.is_active).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
 }
@@ -435,8 +444,8 @@ async function addStaff(){
 async function loadCalendar(){
   const c=await request('/api/v1/calendar/status');
   const dot=document.getElementById('calendarDot');
-  if(c){calendarStatus.textContent=`${c.account_label||'Google account'} · ${c.status} · ${c.external_calendar_id}`;dot.classList.toggle('ok',c.status==='connected');}
-  else{calendarStatus.textContent='Not connected.';dot.classList.remove('ok');}
+  state.calendarConnected=!!c;if(c){calendarStatus.textContent=`${c.account_label||'Google account'} · ${c.status} · ${c.external_calendar_id}`;dot.classList.toggle('ok',c.status==='connected');}
+  else{state.calendarConnected=false;calendarStatus.textContent='Not connected.';dot.classList.remove('ok');} renderOnboarding();
 }
 async function loadVoiceStatus(){
   const v=await request('/api/v1/voice/status'); const provider=(v.llm_provider||'groq'); const model=v.llm_model||'not set';
