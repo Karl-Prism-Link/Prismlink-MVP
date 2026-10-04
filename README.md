@@ -5,26 +5,11 @@ handles appointment workflows, records messages, and persists call outcomes for 
 
 ## Current phase
 
-The software MVP is runnable, and the first real end-to-end telephone call through FreeSWITCH and
-the Pipecat voice runtime has passed:
-
-```text
-Phone / SIP carrier
-        ↓
-FreeSWITCH
-        ↓ bidirectional PCM WebSocket
-PRISM LINK voice runtime
-        ↓
-Deepgram STT/TTS + Groq or OpenRouter
-        ↓
-Tenant-scoped booking tools + Google Calendar
-```
-
-The deployed 2talk trunk, FreeSWITCH build, codec path, media WebSocket, Deepgram STT/TTS, Groq, and
-audible telephone playback have been verified on an initial live call. Repeatable booking and
-failure-path scenarios, cleanup hardening, monitoring, privacy controls, and pilot operations are
-still required. Do not forward customer calls until the real-phone exit criteria in
-[the MVP status](docs/MVP_STATUS.md) pass.
+The Aurora SIP/RTP integration and Pipecat call pipeline are in the repository. End-to-end telephone
+calling is still being validated: recent Aurora event callbacks were rejected with HTTP 422 because
+the call ID did not match the API's UUID requirement. Verify event handling, two-way audio, booking
+and Google Calendar writes, and call cleanup before forwarding customer calls. See
+[the MVP status](docs/MVP_STATUS.md) and [Aurora setup](docs/AURORA_SETUP.md).
 
 ## Implemented
 
@@ -36,7 +21,7 @@ still required. Do not forward customer calls until the real-phone exit criteria
 - Call logs, transcripts, outcomes, summaries, and a salon message inbox.
 - Browser/WebRTC voice using Pipecat, Deepgram STT/TTS, and Groq/OpenRouter tool calling.
 - Deterministic handling for common booking, message, routing, hours, and confirmation turns.
-- FreeSWITCH media WebSocket transport with per-call isolation and DID-based tenant routing.
+- Aurora SIP/RTP transport with an isolated Pipecat pipeline per call and called-number tenant routing.
 - Dashboard, health endpoints, Alembic migrations, Docker assets, and automated tests.
 
 ## Quick start
@@ -64,9 +49,9 @@ python -m ruff format --check .
 ```
 
 The suite covers tenant isolation, booking safety and concurrency, migrations, voice state
-handling, messages, FreeSWITCH transport isolation, and Aurora RTP packet/codec helpers.
+handling, messages, Aurora RTP packet/codec handling, and voice-call isolation.
 
-## Voice and FreeSWITCH
+## Voice and Aurora
 
 Install the voice stack:
 
@@ -80,15 +65,9 @@ Run browser/WebRTC voice:
 python -m apps.voice.bot --transport webrtc
 ```
 
-Run the FreeSWITCH listener:
-
-```powershell
-python -m apps.voice.bot_freeswitch
-```
-
-Provider keys and transport settings belong only in the ignored `.env` file. Follow the
-[voice and FreeSWITCH setup guide](docs/VOICE_SETUP.md) for configuration and live-call checks.
-For the Aurora SIP/RTP edge, follow [Aurora integration setup](docs/AURORA_SETUP.md).
+The API starts the Aurora call pipeline from SIP events. Configure the private API environment and
+Aurora callback/control API using [Aurora integration setup](docs/AURORA_SETUP.md). Keep provider
+keys and shared control tokens in the ignored `.env` file.
 
 ## Database
 
@@ -112,7 +91,7 @@ call coordination boundary but is not yet the authoritative session coordinator.
 
 - [Documentation index](docs/README.md)
 - [Current MVP and pilot status](docs/MVP_STATUS.md)
-- [Voice and FreeSWITCH setup](docs/VOICE_SETUP.md)
+- [Voice runtime setup](docs/VOICE_SETUP.md)
 - [Google Calendar OAuth setup](docs/GOOGLE_OAUTH_SETUP.md)
 - [OpenRouter development setup](docs/OPENROUTER_SETUP.md)
 
@@ -121,7 +100,7 @@ call coordination boundary but is not yet the authoritative session coordinator.
 ```text
 apps/api/          FastAPI application and HTTP routes
 apps/dashboard/    Salon dashboard
-apps/voice/        Browser and FreeSWITCH voice entry points
+apps/voice/        Browser voice runtime
 core/              Settings, security, and validation
 database/          Models, repositories, and sessions
 docs/              Current guides and historical implementation notes
