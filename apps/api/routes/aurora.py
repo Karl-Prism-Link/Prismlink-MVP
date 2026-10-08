@@ -7,7 +7,7 @@ import ipaddress
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -23,7 +23,7 @@ settings = get_settings()
 
 class AuroraEvent(BaseModel):
     event: str = Field(min_length=1, max_length=64)
-    call_id: UUID
+    call_id: UUID | Literal["system"]
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -186,6 +186,11 @@ async def receive_aurora_event(event: AuroraEvent, request: Request) -> dict[str
         is_loopback = False
     if not is_loopback and client_host != "100.105.4.49":
         raise HTTPException(status_code=403, detail="Aurora callback source is not trusted")
+    if event.event in {"trunk.registered", "trunk.registration_failed"}:
+        log.info("Aurora trunk event: %s status=%s", event.event, event.details.get("status"))
+        return {"status": "accepted"}
+    if not isinstance(event.call_id, UUID):
+        raise HTTPException(status_code=422, detail="Call events require a UUID call_id")
     call_id = str(event.call_id)
     if event.event == "call.ringing":
         try:
