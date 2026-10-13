@@ -64,3 +64,12 @@ app.include_router(aurora.router)
 @app.get("/", include_in_schema=False)
 async def dashboard() -> FileResponse:
     return FileResponse(Path(__file__).resolve().parents[1] / "dashboard" / "index.html")
+
+
+@app.get("/dashboard-new", include_in_schema=False)
+async def dashboard_new() -> FileResponse:
+    return FileResponse(
+        Path(__file__).resolve().parents[1]
+        / "dashboard"
+        / "prism-link-dashboard-api-login.html"
+    )

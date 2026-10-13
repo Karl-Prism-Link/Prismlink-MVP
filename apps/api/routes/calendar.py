@@ -24,6 +24,18 @@ from services.credentials import CredentialStoreError, LocalEncryptedCredentialS
 
 router = APIRouter(prefix="/api/v1/calendar", tags=["calendar"])
 
+def _oauth_redirect(state_token: str | None, result: str) -> RedirectResponse:
+    target = "/"
+    if state_token:
+        try:
+            candidate = decode_oauth_state(state_token).get("return_to")
+            if candidate in {"/", "/dashboard-new"}:
+                target = candidate
+        except HTTPException:
+            pass
+    return RedirectResponse(url=f"{target}?calendar={result}", status_code=303)
+
+
 
 @router.get("/status", response_model=CalendarStatusOut | None)
 async def calendar_status(
@@ -35,12 +47,14 @@ async def calendar_status(
 @router.get("/google/connect", response_model=GoogleOAuthStartOut)
 async def start_google_oauth(
     external_calendar_id: str = Query(default="primary", min_length=1, max_length=256),
+    return_to: str = Query(default="/", pattern=r"^(/|/dashboard-new)$"),
     auth: AuthContext = Depends(get_auth_context),
 ) -> GoogleOAuthStartOut:
     authorization_url = build_authorization_url(
         tenant_id=auth.tenant_id,
         user_id=auth.user_id,
         external_calendar_id=external_calendar_id,
+        return_to=return_to,
     )
     return GoogleOAuthStartOut(authorization_url=authorization_url)
 
@@ -53,7 +67,7 @@ async def google_oauth_callback(
     db: DBSession = Depends(get_db),
 ):
     if error or not code or not state_token:
-        return RedirectResponse(url="/?calendar=error", status_code=303)
+        return _oauth_redirect(state_token, "error")
 
     try:
         state_payload = decode_oauth_state(state_token)
@@ -136,7 +150,7 @@ async def google_oauth_callback(
         )
     )
     await db.commit()
-    return RedirectResponse(url="/?calendar=connected", status_code=303)
+    return _oauth_redirect(state_token, "connected")
 
 
 @router.post("/disconnect", status_code=204)
