@@ -112,6 +112,10 @@
     .connection-state{display:flex;align-items:center;gap:8px;margin-top:12px}
     .connection-dot{width:9px;height:9px;border-radius:50%;background:#94a3b8}
     .connection-dot.ok{background:#16a36a}
+    .monitor-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:14px 0 20px}
+    .monitor-kpis .kpi b{font-size:1.25rem}
+    .monitor-details{overflow-x:auto}
+    .monitor-note{padding:13px 15px;border:1px solid #dbeafe;border-radius:9px;background:#f4f9ff;color:#315b91;font-size:.86rem;line-height:1.5;margin:18px 0 0}
     pre{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.83rem}
     .auth-shell{max-width:940px;margin:62px auto;padding:0 24px}
     .auth-shell .grid{grid-template-columns:1fr 1fr}
@@ -159,6 +163,7 @@
     <button data-tab="bookings" onclick="showTab('bookings',this)">Bookings</button>
     <button data-tab="calls" onclick="showTab('calls',this)">Calls</button>
     <button data-tab="messages" onclick="showTab('messages',this)">Messages</button>
+    <button data-tab="monitoring" onclick="showTab('monitoring',this)">Monitoring</button>
     <button data-tab="simulate" onclick="showTab('simulate',this)">Call simulator</button>
     <button class="secondary" onclick="logout()">Sign out</button>
   </nav>
@@ -294,6 +299,24 @@
     </div>
   </div>
 
+  <div id="monitoring" class="tab hidden">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Service monitoring</h2><p class="muted">Live health and Pipecat metrics from this Prism Link server.</p></div>
+        <button class="secondary-btn compact" onclick="loadMonitoring()">Refresh</button>
+      </div>
+      <p id="monitoringUpdated" class="helper">Not checked yet.</p>
+      <div class="monitor-kpis">
+        <div class="kpi"><span class="muted">API readiness</span><b id="monitorApiState">—</b></div>
+        <div class="kpi"><span class="muted">Calls started</span><b id="monitorCallsStarted">—</b></div>
+        <div class="kpi"><span class="muted">Active calls</span><b id="monitorActiveCalls">—</b></div>
+        <div class="kpi"><span class="muted">Fallback calls</span><b id="monitorFallbackCalls">—</b></div>
+      </div>
+      <div id="monitoringDetails" class="monitor-details"></div>
+      <p class="monitor-note">This page shows Pipecat and API metrics. Aurora SIP/RTP and server CPU, memory, and disk are collected by Prometheus and shown in the Grafana Voice Operations dashboard.</p>
+    </div>
+  </div>
+
   <div id="simulate" class="tab hidden">
     <div class="grid">
       <div class="card">
@@ -344,6 +367,7 @@ function showTab(id,btn){
   if(btn)btn.classList.add('active');
   if(id==='bookings'||id==='calls'||id==='overview')refreshActivity();
   if(id==='messages')loadMessages();
+  if(id==='monitoring')loadMonitoring();
 }
 function salonInitials(name){ return (name||'PRISM LINK').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase(); }
 async function boot(){
@@ -475,6 +499,70 @@ function renderMessages(){
   if(!state.messages.length){messagesTable.innerHTML='<p class="muted">No follow-up messages yet.</p>';kpiMessages.textContent='0';return;}
   kpiMessages.textContent=state.messages.filter(m=>m.status==='new').length;
   messagesTable.innerHTML=`<table><thead><tr><th>When</th><th>Caller</th><th>Callback</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody>${state.messages.map(m=>`<tr><td>${esc(new Date(m.created_at).toLocaleString())}</td><td>${esc(m.customer_name||'Caller')}</td><td>${esc(m.callback_phone||'—')}</td><td>${esc(m.message_text)}</td><td><select style="min-width:120px" onchange="updateMessageStatus('${m.id}',this.value)"><option value="new" ${m.status==='new'?'selected':''}>New</option><option value="contacted" ${m.status==='contacted'?'selected':''}>Contacted</option><option value="resolved" ${m.status==='resolved'?'selected':''}>Resolved</option></select></td><td><button class="secondary-btn compact" onclick="openTranscript('${m.id}')">Transcript</button></td></tr>`).join('')}</tbody></table>`;
+}
+function metricSample(text,name,labels={}){
+  for(const line of text.split(/\\r?\\n/)){
+    if(!line||line[0]==='#')continue;
+    const split=line.lastIndexOf(' ');
+    if(split<0)continue;
+    const key=line.slice(0,split), value=Number(line.slice(split+1));
+    if(!Number.isFinite(value))continue;
+    if(key===name)return value;
+    if(!key.startsWith(name+'{'))continue;
+    const matches=Object.entries(labels).every(([label,wanted])=>key.includes(label+'="'+wanted+'"'));
+    if(matches)return value;
+  }
+  return null;
+}
+function metricText(value,digits=2){return value==null?'Not reported':Number(value).toLocaleString(undefined,{maximumFractionDigits:digits});}
+async function loadMonitoring(){
+  const apiState=document.getElementById('monitorApiState');
+  const updated=document.getElementById('monitoringUpdated');
+  const details=document.getElementById('monitoringDetails');
+  updated.textContent='Checking health and metrics…';
+  try{
+    const [healthResponse,metricsResponse]=await Promise.all([
+      fetch('/health/ready',{headers:{'Authorization':'Bearer '+token}}),
+      fetch('/metrics',{headers:{'Authorization':'Bearer '+token}})
+    ]);
+    const health=healthResponse.ok?await healthResponse.json():null;
+    const metrics=metricsResponse.ok?await metricsResponse.text():'';
+    const ready=healthResponse.ok&&health?.status==='ready';
+    apiState.textContent=ready?'Ready':'Unavailable';
+    apiState.style.color=ready?'#138758':'#b42318';
+    const started=metricSample(metrics,'calls_started_total');
+    const active=metricSample(metrics,'active_calls');
+    const fallback=metricSample(metrics,'call_outcomes_total',{outcome:'fallback'});
+    document.getElementById('monitorCallsStarted').textContent=metricText(started,0);
+    document.getElementById('monitorActiveCalls').textContent=metricText(active,0);
+    document.getElementById('monitorFallbackCalls').textContent=metricText(fallback,0);
+    const completed=metricSample(metrics,'calls_completed_total');
+    const failed=metricSample(metrics,'calls_failed_total');
+    const dbErrors=metricSample(metrics,'db_errors_total');
+    const httpCount=metricSample(metrics,'http_requests_total');
+    const turnCount=metricSample(metrics,'voice_turn_latency_seconds_count');
+    const turnSum=metricSample(metrics,'voice_turn_latency_seconds_sum');
+    const totalCallCount=metricSample(metrics,'stg_latency_seconds_count',{stage:'total_call'});
+    const totalCallSum=metricSample(metrics,'stg_latency_seconds_sum',{stage:'total_call'});
+    const turnMean=turnCount>0?turnSum/turnCount:null;
+    const callMean=totalCallCount>0?totalCallSum/totalCallCount:null;
+    details.innerHTML='<table><thead><tr><th>Signal</th><th>Value</th></tr></thead><tbody>'+
+      '<tr><td>Calls completed</td><td>'+metricText(completed,0)+'</td></tr>'+
+      '<tr><td>Calls counted as failed</td><td>'+metricText(failed,0)+'</td></tr>'+
+      '<tr><td>Database errors</td><td>'+metricText(dbErrors,0)+'</td></tr>'+
+      '<tr><td>HTTP requests observed</td><td>'+metricText(httpCount,0)+'</td></tr>'+
+      '<tr><td>Average call duration</td><td>'+(callMean==null?'No call samples':metricText(callMean)+' s')+'</td></tr>'+
+      '<tr><td>Voice turn latency samples</td><td>'+metricText(turnCount,0)+'</td></tr>'+
+      '<tr><td>Average voice turn latency</td><td>'+(turnMean==null?'No voice-turn samples':metricText(turnMean)+' s')+'</td></tr>'+
+      '</tbody></table>';
+    if(!metricsResponse.ok)details.innerHTML='<p class="muted">The metrics endpoint did not respond successfully.</p>';
+    updated.textContent='Last checked '+new Date().toLocaleString();
+  }catch(error){
+    apiState.textContent='Unavailable';
+    apiState.style.color='#b42318';
+    updated.textContent='Monitoring check failed: '+error.message;
+    details.innerHTML='<p class="muted">Could not read live health and metrics. Check that this dashboard is being served by the Prism Link API.</p>';
+  }
 }
 async function updateMessageStatus(id,status){try{const updated=await request('/api/v1/messages/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({status})});state.messages=state.messages.map(m=>m.id===id?updated:m);renderMessages();setStatus('Message marked '+status+'.');}catch(e){setStatus(e.message);await loadMessages();}}
 async function openTranscript(id){try{const rows=await request('/api/v1/messages/'+encodeURIComponent(id)+'/transcript');messageTranscript.innerHTML=rows.length?rows.map(r=>`<p><b>${esc(r.speaker==='caller'?'Caller':'Receptionist')}</b> <span class="muted">${esc(new Date(r.created_at).toLocaleTimeString())}</span><br>${esc(r.text)}</p>`).join(''):'<p class="muted">No transcript stored for this call.</p>';messageTranscriptCard.classList.remove('hidden');}catch(e){setStatus(e.message)}}
