@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: PRISM LINK monitoring
+    orgId: 1
+    folder: PRISM LINK
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
