@@ -45,7 +45,7 @@ def _require_client_settings() -> tuple[str, str, str]:
 
 
 def create_oauth_state(
-    *, tenant_id: UUID, user_id: UUID, external_calendar_id: str = "primary"
+    *, tenant_id: UUID, user_id: UUID, external_calendar_id: str = "primary", return_to: str = "/"
 ) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
@@ -54,6 +54,7 @@ def create_oauth_state(
         "tenant_id": str(tenant_id),
         "user_id": str(user_id),
         "external_calendar_id": external_calendar_id,
+        "return_to": return_to if return_to in {"/", "/dashboard-new"} else "/",
         "nonce": token_urlsafe(24),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=10)).timestamp()),
@@ -85,13 +86,14 @@ def decode_oauth_state(state_token: str) -> dict:
 
 
 def build_authorization_url(
-    *, tenant_id: UUID, user_id: UUID, external_calendar_id: str = "primary"
+    *, tenant_id: UUID, user_id: UUID, external_calendar_id: str = "primary", return_to: str = "/"
 ) -> str:
     client_id, _client_secret, redirect_uri = _require_client_settings()
     state = create_oauth_state(
         tenant_id=tenant_id,
         user_id=user_id,
         external_calendar_id=external_calendar_id,
+        return_to=return_to,
     )
     params = {
         "client_id": client_id,
