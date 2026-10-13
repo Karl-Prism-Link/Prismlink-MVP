@@ -1,8 +1,3 @@
-# PRISM LINK Pipecat Bot
+# Pipecat voice runtime
 
-A voice runtime connecting Aurora, Pipecat, and PRISM LINK.
-
-## Start
-
-Follow the main [Aurora integration guide](../../docs/AURORA_SETUP.md) and
-[voice runtime setup](../../docs/VOICE_SETUP.md).
+The Pipecat runtime is maintained in [`apps/voice`](../../apps/voice/README.md). Follow the canonical setup guides for [voice runtime configuration](../../docs/VOICE_SETUP.md) and [Aurora SIP/RTP integration](../../docs/AURORA_SETUP.md).
