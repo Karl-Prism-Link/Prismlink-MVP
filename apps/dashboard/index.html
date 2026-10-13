@@ -501,7 +501,7 @@ function renderMessages(){
   messagesTable.innerHTML=`<table><thead><tr><th>When</th><th>Caller</th><th>Callback</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody>${state.messages.map(m=>`<tr><td>${esc(new Date(m.created_at).toLocaleString())}</td><td>${esc(m.customer_name||'Caller')}</td><td>${esc(m.callback_phone||'—')}</td><td>${esc(m.message_text)}</td><td><select style="min-width:120px" onchange="updateMessageStatus('${m.id}',this.value)"><option value="new" ${m.status==='new'?'selected':''}>New</option><option value="contacted" ${m.status==='contacted'?'selected':''}>Contacted</option><option value="resolved" ${m.status==='resolved'?'selected':''}>Resolved</option></select></td><td><button class="secondary-btn compact" onclick="openTranscript('${m.id}')">Transcript</button></td></tr>`).join('')}</tbody></table>`;
 }
 function metricSample(text,name,labels={}){
-  for(const line of text.split(/\\r?\\n/)){
+  for(const line of text.split(/\r?\n/)){
     if(!line||line[0]==='#')continue;
     const split=line.lastIndexOf(' ');
     if(split<0)continue;
