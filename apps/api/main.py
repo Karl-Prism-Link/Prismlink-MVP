@@ -73,3 +73,12 @@ async def dashboard_new() -> FileResponse:
         / "dashboard"
         / "prism-link-dashboard-api-login.html"
     )
+
+@app.get("/dashboard", include_in_schema=False)
+@app.get("/dashboard/", include_in_schema=False)
+async def user_dashboard() -> FileResponse:
+    return FileResponse(
+        Path(__file__).resolve().parents[1]
+        / "dashboard"
+        / "prism-link-user-dashboard.html"
+    )
