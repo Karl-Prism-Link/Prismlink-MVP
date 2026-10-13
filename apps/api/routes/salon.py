@@ -79,6 +79,27 @@ async def create_service(
     return service
 
 
+@router.patch("/services/{service_id}", response_model=ServiceOut)
+async def update_service(
+    service_id: UUID,
+    payload: ServiceCreate,
+    auth: AuthContext = Depends(get_auth_context),
+    db: DBSession = Depends(get_db),
+) -> Service:
+    """Update a salon service while keeping changes scoped to its owning tenant."""
+    service = await ServiceRepository(db, auth.tenant_id).get(service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    service.name = canonical_service_name(payload.name)
+    service.description = payload.description
+    service.duration_minutes = payload.duration_minutes
+    service.price = payload.price
+    service.updated_at = utcnow()
+    await db.commit()
+    await db.refresh(service)
+    return service
+
+
 @router.delete("/services/{service_id}", status_code=204)
 async def delete_service(
     service_id: UUID,
