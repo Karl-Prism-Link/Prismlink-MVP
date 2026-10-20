@@ -1,6 +1,8 @@
 import pytest
 from prometheus_client import REGISTRY
 
+import monitoring
+from core.config import Settings
 from monitoring import (
     db_timer,
     record_call_finished,
@@ -16,6 +18,31 @@ def test_metrics_endpoint(client):
     assert response.headers["content-type"].startswith("text/plain")
     assert "calls_started_total" in response.text
     assert "db_latency_seconds" in response.text
+
+
+def test_metrics_endpoint_requires_configured_token(client, monkeypatch):
+    token = "m" * 32
+    monkeypatch.setattr(
+        monitoring,
+        "get_settings",
+        lambda: Settings(_env_file=None, app_env="test", metrics_token=token),
+    )
+
+    assert client.get("/metrics").status_code == 401
+    assert client.get("/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    authorised = client.get("/metrics", headers={"Authorization": f"Bearer {token}"})
+    assert authorised.status_code == 200
+    assert "calls_started_total" in authorised.text
+
+
+def test_metrics_endpoint_is_hidden_in_production_without_token(client, monkeypatch):
+    monkeypatch.setattr(
+        monitoring,
+        "get_settings",
+        lambda: Settings(_env_file=None, app_env="production", metrics_token=None),
+    )
+
+    assert client.get("/metrics").status_code == 404
 
 
 def test_db_timer_records_latency_and_errors():

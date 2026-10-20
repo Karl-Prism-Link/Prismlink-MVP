@@ -39,20 +39,46 @@ class InMemoryRateLimiter:
 limiter = InMemoryRateLimiter()
 
 
+def client_identity(request: Request) -> str:
+    """Best-effort client identity for rate-limit keys.
+
+    Behind a trusted reverse proxy, the right-most X-Forwarded-For entry is the
+    address the nearest proxy observed and is the only hop we can trust.
+    """
+    if get_settings().trust_proxy_headers:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            candidate = forwarded.split(",")[-1].strip()
+            if candidate:
+                return candidate[:64]
+    return request.client.host if request.client else "unknown"
+
+
 def _client_key(request: Request, scope: str) -> str:
-    client = request.client.host if request.client else "unknown"
-    return f"{scope}:{client}"
+    return f"{scope}:ip:{client_identity(request)}"
+
+
+def _account_key(scope: str, identifier: str) -> str:
+    return f"{scope}:id:{identifier.strip().lower()[:254]}"
 
 
 async def enforce_auth_rate_limit(
-    request: Request, *, scope: str, limit: int, window_seconds: int
+    request: Request,
+    *,
+    scope: str,
+    limit: int,
+    window_seconds: int,
+    identifier: str | None = None,
 ) -> None:
     if get_settings().app_env == "test":
         return
-    retry_after = limiter.retry_after(
-        _client_key(request, scope), limit=limit, window_seconds=window_seconds
-    )
-    if retry_after is not None:
+    keys = [_client_key(request, scope)]
+    if identifier:
+        keys.append(_account_key(scope, identifier))
+    for key in keys:
+        retry_after = limiter.retry_after(key, limit=limit, window_seconds=window_seconds)
+        if retry_after is None:
+            continue
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
@@ -69,3 +95,10 @@ async def limit_registration(request: Request) -> None:
 
 async def limit_login(request: Request) -> None:
     await enforce_auth_rate_limit(request, scope="login", limit=10, window_seconds=900)
+
+
+async def limit_login_account(request: Request, email: str) -> None:
+    """Per-account login throttle so one address cannot be sprayed from many IPs."""
+    await enforce_auth_rate_limit(
+        request, scope="login-account", limit=5, window_seconds=900, identifier=email
+    )

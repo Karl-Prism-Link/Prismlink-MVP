@@ -23,3 +23,8 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:8000']
     metrics_path: '/metrics'
+    # /metrics requires METRICS_TOKEN. Create the file with mode 0600 containing
+    # only the token, then uncomment:
+    # authorization:
+    #   type: Bearer
+    #   credentials_file: /etc/prometheus/metrics_token

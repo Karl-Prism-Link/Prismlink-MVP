@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     record_calls: bool = False
 
+    # Bearer token required by /metrics. When unset the endpoint is exposed in
+    # development and test only; production answers 404 until it is configured.
+    metrics_token: str | None = None
+    # Set when the API runs behind a reverse proxy that appends X-Forwarded-For,
+    # so rate limiting keys on the real client instead of the proxy address.
+    trust_proxy_headers: bool = False
+
     # Local Aurora SIP control and RTP bridge. Keep the webhook/control API on
     # loopback; AURORA_RTP_HOST is Aurora's configured local_ip (not external_ip).
     aurora_control_api_url: str = "http://127.0.0.1:8088"
@@ -114,6 +121,18 @@ def validate_runtime_settings(settings: Settings) -> None:
         and settings.aurora_event_token == settings.aurora_control_api_token
     ):
         errors.append("AURORA_EVENT_TOKEN must differ from AURORA_CONTROL_API_TOKEN")
+    if settings.metrics_token and (
+        len(settings.metrics_token) < 32
+        or settings.metrics_token.startswith("replace-with-")
+        or settings.metrics_token
+        in {
+            settings.jwt_secret_key,
+            settings.credential_encryption_key,
+            settings.oauth_state_secret,
+            settings.aurora_event_token,
+        }
+    ):
+        errors.append("METRICS_TOKEN must be an independent random value of at least 32 characters")
     if errors:
         raise RuntimeError("Invalid runtime configuration: " + "; ".join(errors))
 

@@ -1,10 +1,10 @@
 import re
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
-from apps.api.rate_limit import limit_login, limit_registration
+from apps.api.rate_limit import limit_login, limit_login_account, limit_registration
 from apps.api.schemas import LoginIn, RegisterIn, TokenOut
 from core.security import create_access_token, hash_password, verify_password
 from database.models import Tenant, User
@@ -63,9 +63,11 @@ async def register(
 @router.post("/login", response_model=TokenOut)
 async def login(
     payload: LoginIn,
+    request: Request,
     _rate_limit: None = Depends(limit_login),
     db: DBSession = Depends(get_db),
 ) -> TokenOut:
+    await limit_login_account(request, payload.email)
     user = await UserRepository(db).by_email(payload.email)
     if (
         user is None
