@@ -107,9 +107,31 @@ Safe areas: keep all type 96px from the top and 190px from the bottom; nothing i
 
 ---
 
-## 7. Animatic controls
+## 7. Rendered files
 
-`docs/marketing/promo-20s.html`
+| File | What it is |
+|---|---|
+| `promo-20s.mp4` | 20s master, 1920×1080, 30 fps |
+| `promo-15s.mp4` | paid-social cut |
+| `promo-6s.mp4` | bumper |
+| `promo-poster.png` | still for thumbnails / the booking moment |
+| `promo-20s.html` | click-to-play animatic (also does 15s, 6s and 9:16) |
+| `render-promo.mjs` | frame renderer that produced the MP4s |
+
+Rebuild (no browser needed — SVG frames rasterised with resvg, encoded with ffmpeg):
+
+```bash
+npm i @resvg/resvg-js ffmpeg-static
+curl -L -o inter.zip https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
+unzip -j inter.zip 'extras/ttf/Inter-*.ttf' -d fonts
+node render-promo.mjs --cut 20 --out promo-20s.mp4
+node render-promo.mjs --cut 20 --still 10.9 --out promo-poster.png
+```
+
+
+## 8. Animatic controls
+
+Open `promo-20s.html` in a browser:
 
 | Key | Action |
 |---|---|

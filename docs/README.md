@@ -12,8 +12,9 @@
 
 ## Marketing
 
-- [20-second promo draft](marketing/PRISM_LINK_PROMO_20S.md) — shot-by-shot script, VO, brand kit,
-  and export checklist, with a timing-accurate [animatic](marketing/promo-20s.html).
+- [20-second promo](marketing/PRISM_LINK_PROMO_20S.md) — shot-by-shot script, VO, brand kit and
+  export checklist, with rendered cuts ([20s](marketing/promo-20s.mp4), [15s](marketing/promo-15s.mp4),
+  [6s](marketing/promo-6s.mp4)) and a timing-accurate [animatic](marketing/promo-20s.html).
 
 ## Historical implementation notes
 
