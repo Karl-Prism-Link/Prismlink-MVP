@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PRISM LINK — 20s promo animatic</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{
+    --navy:#09283E; --teal:#087F98; --cyan:#00BACC; --mint:#168565;
+    --mist:#EAF9FB; --paper:#F7FAFC; --ink:#19364A; --mute:#7E909D;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:#050d14;overflow:hidden;
+    font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  #wrap{position:fixed;inset:0;display:grid;place-items:center}
+  #stage{width:1920px;height:1080px;position:relative;overflow:hidden;background:var(--navy);
+    transform-origin:center center;box-shadow:0 40px 120px #000a}
+
+  .scene{position:absolute;inset:0;opacity:0;transition:opacity .18s linear;
+    display:grid;place-items:center;overflow:hidden}
+  .scene.on{opacity:1}
+
+  /* generic entrance */
+  .up{opacity:0}
+  .scene.on .up{animation:up .62s cubic-bezier(.2,.85,.2,1) both}
+  @keyframes up{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+  .pop{opacity:0}
+  .scene.on .pop{animation:pop .5s cubic-bezier(.16,1.3,.3,1) both}
+  @keyframes pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+  .fade{opacity:0}
+  .scene.on .fade{animation:fade .7s ease both}
+  @keyframes fade{to{opacity:1}}
+
+  /* ---------- 1. the missed call ---------- */
+  #s1{background:
+      radial-gradient(900px 620px at 22% 18%,#3b2b21 0%,#1d1611 45%,#120e0b 100%)}
+  #s1 .grain{position:absolute;inset:0;opacity:.16;
+    background-image:radial-gradient(#fff3 1px,transparent 1px);background-size:4px 4px}
+  .s1-clock{position:absolute;left:130px;top:150px;color:#fff}
+  .s1-clock .t{font-size:150px;font-weight:250;letter-spacing:-.03em;line-height:.95;
+    font-variant-numeric:tabular-nums}
+  .s1-clock .d{margin-top:26px;font-size:44px;font-weight:300;color:#e7d8cb;letter-spacing:.01em}
+  .s1-clock .kicker{font-size:22px;letter-spacing:.34em;text-transform:uppercase;
+    color:#c79a72;margin-bottom:28px;font-weight:600}
+
+  .phone{position:absolute;right:210px;top:230px;width:300px;height:600px;border-radius:52px;
+    background:linear-gradient(160deg,#39322c,#15110e 60%);padding:14px;
+    box-shadow:0 50px 90px #000a, inset 0 0 0 2px #ffffff14}
+  .phone .screen{width:100%;height:100%;border-radius:40px;
+    background:linear-gradient(180deg,#0e2230,#07161f);overflow:hidden;position:relative;
+    display:grid;place-items:center}
+  .phone .screen::after{content:"";position:absolute;inset:0;
+    background:radial-gradient(300px 200px at 50% 34%,#47e0f533,transparent 70%)}
+  .ring{position:absolute;width:120px;height:120px;border-radius:50%;
+    border:2px solid #6fe4f2;opacity:0;top:210px}
+  .scene.on .ring{animation:ring 1.5s ease-out infinite}
+  .scene.on .ring.r2{animation-delay:calc(.5s * var(--k,1))}
+  .scene.on .ring.r3{animation-delay:calc(1s * var(--k,1))}
+  @keyframes ring{0%{transform:scale(.6);opacity:.85}100%{transform:scale(2.6);opacity:0}}
+  .incoming{position:relative;z-index:2;text-align:center;color:#dff6fb}
+  .incoming .who{font-size:13px;letter-spacing:.3em;color:#6fa6b8;margin-bottom:12px}
+  .incoming .num{font-size:26px;font-weight:300;letter-spacing:.04em}
+  .missed{position:absolute;left:50%;top:430px;transform:translate(-50%,-50%);
+    background:#c8432f;color:#fff;font-size:20px;font-weight:800;letter-spacing:.16em;
+    padding:16px 28px;border-radius:10px;white-space:nowrap;opacity:0;
+    box-shadow:0 18px 50px #0008}
+  .scene.on .missed{animation:stamp .34s cubic-bezier(.2,1.5,.4,1) calc(2.15s * var(--k,1)) both}
+  @keyframes stamp{from{opacity:0;transform:translate(-50%,-50%) scale(1.7) rotate(-6deg)}
+                   to{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-6deg)}}
+
+  /* ---------- 2. prism link answers ---------- */
+  #s2{background:radial-gradient(900px 640px at 50% 46%,#10455a 0%,#09283e 58%,#05161f 100%)}
+  .streak{position:absolute;left:-380px;top:400px;width:2700px;height:230px;opacity:0;
+    transform:rotate(-9deg);filter:blur(26px);
+    background:linear-gradient(90deg,#00bacc00,#00bacc33 22%,#8af1ffcc 50%,#00bacc33 78%,#00bacc00)}
+  .scene.on .streak{animation:flare 2.4s ease-out both}
+  @keyframes flare{0%{opacity:0;transform:rotate(-9deg) scaleX(.55)}
+    35%{opacity:.95}100%{opacity:.5;transform:rotate(-9deg) scaleX(1)}}
+
+  .lockup{position:relative;z-index:3;display:flex;align-items:center;gap:30px}
+  .glyph{width:86px;height:86px;position:relative;flex:0 0 auto}
+  .glyph span{position:absolute;inset:0;clip-path:polygon(50% 0,100% 100%,0 100%)}
+  .glyph .g1{background:#00bacc;opacity:.9;transform:translateX(-13px) scale(.86)}
+  .glyph .g2{background:#087F98;transform:translateY(6px) scale(.8)}
+  .glyph .g3{background:#dff9ff;opacity:.92;transform:translateX(13px) scale(.86)}
+  .wordmark{display:flex;align-items:baseline;gap:14px;color:#fff;
+    font-size:96px;letter-spacing:.16em;line-height:1}
+  .wordmark b{font-weight:650}
+  .wordmark i{font-style:normal;font-weight:250;color:#a9dbe7}
+
+  .wave{display:flex;align-items:center;gap:9px;height:110px}
+  .wave i{display:block;width:8px;border-radius:4px;background:linear-gradient(180deg,#8af1ff,#087F98);
+    transform-origin:center}
+  .scene.on .wave i{animation:bar 1.05s ease-in-out infinite alternate}
+  @keyframes bar{from{height:14px;opacity:.45}to{height:86px;opacity:1}}
+  .s2-cap{position:absolute;bottom:126px;width:100%;text-align:center;color:#bfeaf4;
+    font-size:26px;letter-spacing:.32em;text-transform:uppercase;font-weight:600}
+
+  /* ---------- 3. the booking call ---------- */
+  #s3{background:linear-gradient(140deg,#eef7fa,#f7fbfd 55%,#e6f4f8)}
+  #s3 .frame{position:absolute;inset:86px;background:#fff;border-radius:34px;
+    box-shadow:0 40px 90px #0b2b3a1f,0 0 0 1px #dbe9ef;overflow:hidden;display:grid;
+    grid-template-columns:600px 1fr}
+  .call-side{background:linear-gradient(165deg,#0b2b3a,#0f4356);color:#fff;padding:64px 56px;
+    display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+  .call-side .live{display:flex;align-items:center;gap:12px;font-size:18px;letter-spacing:.26em;
+    text-transform:uppercase;color:#8fd7e6;font-weight:700}
+  .dot{width:11px;height:11px;border-radius:50%;background:#2ee6a6;
+    box-shadow:0 0 0 0 #2ee6a680;animation:beat 1.4s ease-out infinite}
+  @keyframes beat{0%{box-shadow:0 0 0 0 #2ee6a680}100%{box-shadow:0 0 0 16px #2ee6a600}}
+  .caller{display:flex;align-items:center;gap:22px;margin-top:40px}
+  .avatar{width:92px;height:92px;border-radius:26px;display:grid;place-items:center;
+    background:#124d60;color:#9fe6f2;font-size:30px;font-weight:700;letter-spacing:.04em}
+  .caller b{display:block;font-size:30px;font-weight:600}
+  .caller small{display:block;margin-top:8px;font-size:17px;color:#8fb8c6;letter-spacing:.1em}
+  .call-side .wave{margin-top:52px;height:90px}
+  .call-side .wave i{width:7px}
+  .call-foot{font-size:16px;color:#7fa8b6;letter-spacing:.14em;text-transform:uppercase}
+
+  .chat{padding:56px 60px;display:flex;flex-direction:column;gap:20px;position:relative}
+  .bubble{max-width:78%;padding:22px 26px;border-radius:22px;font-size:27px;line-height:1.36;
+    box-shadow:0 10px 26px #0b2b3a0d}
+  .bubble.them{background:#eef4f7;color:var(--ink);border-bottom-left-radius:8px}
+  .bubble.us{align-self:flex-end;background:linear-gradient(135deg,#087F98,#0aa7b8);color:#fff;
+    border-bottom-right-radius:8px}
+  .bubble .tag{display:block;font-size:14px;letter-spacing:.22em;text-transform:uppercase;
+    opacity:.62;margin-bottom:8px;font-weight:700}
+  .booked{align-self:flex-end;display:flex;align-items:center;gap:20px;margin-top:8px;
+    background:#eefaf4;border:1px solid #c9eede;border-radius:20px;padding:20px 26px;color:#0f6b4c}
+  .check{width:44px;height:44px;border-radius:50%;background:#168565;color:#fff;display:grid;
+    place-items:center;font-size:22px;font-weight:800}
+  .booked b{display:block;font-size:24px;letter-spacing:.02em}
+  .booked small{display:block;font-size:16px;color:#4f8d78;margin-top:6px;letter-spacing:.06em}
+
+
+  /* ---------- 4. dashboard ---------- */
+  #s4{background:linear-gradient(160deg,#f2f8fa,#e9f3f7)}
+  .dash{position:absolute;inset:84px 120px;background:#fff;border-radius:26px;overflow:hidden;
+    box-shadow:0 38px 90px #0b2b3a20,0 0 0 1px #dbe9ef;display:grid;
+    grid-template-columns:250px 1fr}
+  .dash-nav{background:#0b2b3a;padding:36px 28px;color:#9dc3cf;font-size:16px;letter-spacing:.06em}
+  .dash-nav .brand{color:#fff;font-size:19px;letter-spacing:.2em;font-weight:650;margin-bottom:38px}
+  .dash-nav .brand i{font-style:normal;font-weight:250;color:#7fc9da}
+  .dash-nav div{padding:12px 14px;border-radius:10px;margin-bottom:6px}
+  .dash-nav .sel{background:#124d60;color:#dff6fb}
+  .dash-main{padding:34px 40px;color:var(--ink)}
+  .dash-head{display:flex;justify-content:space-between;align-items:baseline}
+  .dash-head h3{margin:0;font-size:26px;font-weight:600}
+  .dash-head span{font-size:14px;color:var(--mute);letter-spacing:.14em;text-transform:uppercase}
+  .cal{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:26px}
+  .day{background:#f6fafb;border:1px solid #e5eff3;border-radius:14px;height:330px;padding:14px;
+    position:relative}
+  .day b{display:block;font-size:13px;letter-spacing:.16em;color:#8ba0ad;font-weight:700}
+  .slot{position:absolute;left:12px;right:12px;border-radius:10px;padding:10px 12px;font-size:13px;
+    font-weight:650;line-height:1.25}
+  .slot.a{top:72px;background:#eaf3f8;color:#40789a}
+  .slot.b{top:150px;background:#eaf3f8;color:#40789a}
+  .slot.new{top:228px;background:#e7f7f1;color:#0f6b4c;box-shadow:0 10px 24px #16856526;
+    border:1px solid #bfe9d8;opacity:0}
+  .scene.on .slot.new{animation:pop .6s cubic-bezier(.16,1.3,.3,1) calc(1.5s * var(--k,1)) both}
+  .cards{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:22px}
+  .card{border:1px solid #e7eff3;border-radius:14px;padding:16px 18px}
+  .card h4{margin:0 0 12px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#8ba0ad}
+  .card p{margin:0;font-size:14px;color:#5d7484;line-height:1.55}
+  .card .row{display:flex;justify-content:space-between;padding:7px 0;font-size:13px;
+    border-bottom:1px solid #f0f5f7;color:#5d7484}
+  .card .row:last-child{border:0}
+  .pill{background:#eaf7f1;color:#0f6b4c;padding:3px 9px;border-radius:20px;font-size:11px;
+    font-weight:700}
+
+  /* ---------- 5. claims ---------- */
+  #s5{background:radial-gradient(800px 600px at 30% 50%,#0e3b4e,#09283e 62%,#061a27)}
+  .claims{width:1180px;color:#fff}
+  .claim{display:flex;align-items:center;gap:34px;padding:34px 8px;border-bottom:1px solid #ffffff1a;
+    font-size:58px;font-weight:300;letter-spacing:-.01em}
+  .claim:last-child{border:0}
+  .claim em{font-style:normal;color:#7ceaf7;font-weight:600}
+  .claim .n{font-size:19px;color:#5c93a4;letter-spacing:.2em;font-weight:700;width:54px}
+
+  /* ---------- 6. end card ---------- */
+  #s6{background:radial-gradient(760px 560px at 50% 42%,#10455a,#09283e 60%,#04131c)}
+  .end{position:relative;z-index:3;text-align:center}
+  .end .lockup{justify-content:center}
+  .end .tagline{margin-top:34px;font-size:38px;color:#c7ecf4;font-weight:300;letter-spacing:.02em}
+  .end .cta{margin-top:46px;font-size:20px;letter-spacing:.22em;text-transform:uppercase;
+    color:#7fb9c8;font-weight:650}
+  .end .url{margin-top:12px;font-size:24px;color:#fff;letter-spacing:.12em;font-weight:500}
+
+  /* ---------- 9:16 reframe (body.v) ---------- */
+  body.v #stage{width:1080px;height:1920px}
+  body.v .s1-clock{left:76px;top:190px}
+  body.v .s1-clock .t{font-size:96px}
+  body.v .s1-clock .kicker{font-size:17px;letter-spacing:.26em;margin-bottom:22px}
+  body.v .s1-clock .d{font-size:31px;margin-top:20px}
+  body.v .phone{right:auto;left:50%;margin-left:-170px;top:800px;width:340px;height:680px}
+  body.v .wordmark{font-size:62px;letter-spacing:.12em}
+  body.v .glyph{width:60px;height:60px}
+  body.v .lockup{gap:20px}
+  body.v .wave{height:90px;gap:7px}
+  body.v #s3 .frame{inset:58px 40px;grid-template-columns:1fr;grid-template-rows:640px 1fr}
+  body.v .call-side{padding:50px 44px}
+  body.v .chat{padding:42px 38px;gap:16px}
+  body.v .bubble{font-size:24px;max-width:90%}
+  body.v .booked b{font-size:22px}
+  body.v .dash{inset:80px 40px;grid-template-columns:1fr}
+  body.v .dash-nav{display:none}
+  body.v .dash-main{padding:32px 28px}
+  body.v .cal{gap:8px}
+  body.v .day{height:560px;padding:12px}
+  body.v .day b{font-size:11px}
+  body.v .slot{left:7px;right:7px;padding:8px 9px;font-size:11px}
+  body.v .slot.a{top:64px}
+  body.v .slot.b{top:200px}
+  body.v .slot.new{top:340px}
+  body.v .cards{grid-template-columns:1fr;gap:12px}
+  body.v .claims{width:930px}
+  body.v .claim{font-size:40px;gap:20px;padding:26px 4px}
+  body.v .claim .n{font-size:14px;width:34px}
+  body.v .end .tagline{font-size:31px;margin-top:26px}
+  body.v .end .cta{font-size:16px;margin-top:34px}
+  body.v .end .url{font-size:20px}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;left:0;right:0;bottom:0;padding:10px 16px;display:flex;align-items:center;
+    gap:14px;color:#7fa3b3;font:12px/1 ui-monospace,monospace;background:#050d14cc;
+    backdrop-filter:blur(6px);transition:opacity .25s;z-index:9}
+  body.clean #hud{opacity:0;pointer-events:none}
+  #bar{flex:1;height:3px;background:#ffffff20;border-radius:3px;overflow:hidden;cursor:pointer}
+  #bar i{display:block;height:100%;width:0;background:#00bacc}
+  #tc{width:74px;text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<div id="wrap"><div id="stage">
+
+  <!-- 1 · 0.0–3.2  the missed call -->
+  <section class="scene" id="s1" data-start="0" data-end="3.2">
+    <div class="grain"></div>
+    <div class="s1-clock">
+      <div class="kicker up" style="animation-delay:calc(.12s * var(--k,1))">3:47 PM · Saturday</div>
+      <div class="t up" style="animation-delay:calc(.28s * var(--k,1))">Every chair<br>is full.</div>
+      <div class="d up" style="animation-delay:calc(.62s * var(--k,1))">One phone is ringing.<br>
+        <span style="color:#e07a5f">No one can reach it.</span></div>
+    </div>
+    <div class="phone up" style="animation-delay:calc(.2s * var(--k,1))">
+      <div class="screen">
+        <div class="ring" style="left:calc(50% - 60px)"></div>
+        <div class="ring r2" style="left:calc(50% - 60px)"></div>
+        <div class="ring r3" style="left:calc(50% - 60px)"></div>
+        <div class="incoming">
+          <div class="who">Incoming call</div>
+          <div class="num">Jordan M.</div>
+        </div>
+        <div class="missed">Missed call</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · 3.2–6.4  prism link answers -->
+  <section class="scene" id="s2" data-start="3.2" data-end="6.4">
+    <div class="streak"></div>
+    <div style="position:relative;z-index:3;display:grid;justify-items:center;gap:56px">
+      <div class="lockup up" style="animation-delay:calc(.1s * var(--k,1))">
+        <div class="glyph"><span class="g1"></span><span class="g2"></span><span class="g3"></span></div>
+        <div class="wordmark"><b>PRISM</b><i>LINK</i></div>
+      </div>
+      <div class="wave" data-wave="26"></div>
+      <div class="up" style="animation-delay:calc(.85s * var(--k,1));color:#bfeaf4;font-size:24px;letter-spacing:.34em;
+        text-transform:uppercase;font-weight:600">Answers in one ring</div>
+    </div>
+  </section>
+
+  <!-- 3 · 6.4–12.0  the booking call -->
+  <section class="scene" id="s3" data-start="6.4" data-end="12">
+    <div class="frame">
+      <div class="call-side">
+        <div>
+          <div class="live"><span class="dot"></span>Live call · 00:07</div>
+          <div class="caller">
+            <div class="avatar">JM</div>
+            <div><b>Jordan M.</b><small>Inbound · +64 21 ••• •••</small></div>
+          </div>
+          <div class="wave" data-wave="20"></div>
+        </div>
+        <div class="call-foot">Answered by Prism Link</div>
+      </div>
+      <div class="chat">
+        <div class="bubble them up" style="animation-delay:calc(.3s * var(--k,1))">
+          <span class="tag">Caller</span>Hi — any openings this Thursday?</div>
+        <div class="bubble us up" style="animation-delay:calc(1.65s * var(--k,1))">
+          <span class="tag">Prism Link</span>Thursday, 2:30 with Amara. Shall I book it?</div>
+        <div class="bubble them up" style="animation-delay:calc(3.05s * var(--k,1))">
+          <span class="tag">Caller</span>Yes please.</div>
+        <div class="booked pop" style="animation-delay:calc(4.25s * var(--k,1))">
+          <div class="check">✓</div>
+          <div><b>Booked · Thu 2:30 PM</b><small>Amara · Colour · 45 min</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 4 · 12.0–16.0  dashboard -->
+  <section class="scene" id="s4" data-start="12" data-end="16">
+    <div class="dash">
+      <div class="dash-nav">
+        <div class="brand">PRISM <i>LINK</i></div>
+        <div class="sel">Dashboard</div>
+        <div>Calls</div>
+        <div>Bookings</div>
+        <div>Inbox</div>
+        <div>Setup</div>
+      </div>
+      <div class="dash-main">
+        <div class="dash-head"><h3>This week</h3><span>Mon 12 – Fri 16</span></div>
+        <div class="cal">
+          <div class="day"><b>MON 12</b>
+            <div class="slot a">9:00 · Cut</div><div class="slot b">13:30 · Colour</div></div>
+          <div class="day"><b>TUE 13</b>
+            <div class="slot a">10:00 · Colour</div></div>
+          <div class="day"><b>WED 14</b>
+            <div class="slot a">9:30 · Cut</div><div class="slot b">15:00 · Style</div></div>
+          <div class="day"><b>THU 15</b>
+            <div class="slot a">11:00 · Cut</div>
+            <div class="slot new">2:30 · Jordan M.<br><span style="font-weight:500">Colour · Amara</span></div></div>
+          <div class="day"><b>FRI 16</b>
+            <div class="slot a">8:30 · Cut</div><div class="slot b">12:00 · Colour</div></div>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <h4>Last call summary</h4>
+            <p>“Jordan booked a colour with Amara for Thursday 2:30 PM. Asked about
+              parking — told her to use the rear entrance.”</p>
+          </div>
+          <div class="card">
+            <h4>Inbox</h4>
+            <div class="row"><span>Message · Priya</span><span class="pill">New</span></div>
+            <div class="row"><span>Rebook · Sam T.</span><span class="pill">New</span></div>
+            <div class="row"><span>Call · Thu 2:30 PM</span><span>Logged</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · 16.0–18.6  claims -->
+  <section class="scene" id="s5" data-start="16" data-end="18.6">
+    <div class="claims">
+      <div class="claim up" style="animation-delay:calc(.1s * var(--k,1))"><span class="n">01</span>
+        Answers <em>every</em> call — 24/7</div>
+      <div class="claim up" style="animation-delay:calc(.62s * var(--k,1))"><span class="n">02</span>
+        Books <em>real</em> appointments</div>
+      <div class="claim up" style="animation-delay:calc(1.14s * var(--k,1))"><span class="n">03</span>
+        Remembers <em>every</em> client</div>
+    </div>
+  </section>
+
+  <!-- 6 · 18.6–20.0  end card -->
+  <section class="scene" id="s6" data-start="18.6" data-end="20.01">
+    <div class="streak"></div>
+    <div class="end">
+      <div class="lockup pop" style="animation-delay:calc(.05s * var(--k,1))">
+        <div class="glyph"><span class="g1"></span><span class="g2"></span><span class="g3"></span></div>
+        <div class="wordmark"><b>PRISM</b><i>LINK</i></div>
+      </div>
+      <div class="tagline up" style="animation-delay:calc(.3s * var(--k,1))">Every call, captured.</div>
+      <div class="cta up" style="animation-delay:calc(.55s * var(--k,1))">14-day free trial · no card</div>
+      <div class="url up" style="animation-delay:calc(.7s * var(--k,1))">prismlink.co</div>
+    </div>
+  </section>
+
+</div></div>
+
+<div id="hud">
+  <span id="state">▶ 20s animatic</span>
+  <div id="bar"><i></i></div>
+  <span id="tc">00:00</span>
+  <span style="opacity:.6">C cut · V 9:16 · H hide</span>
+</div>
+
+
+<script>
+(function(){
+  const stage  = document.getElementById('stage');
+  const scenes = [...document.querySelectorAll('.scene')];
+  const bar    = document.querySelector('#bar i');
+  const barBox = document.getElementById('bar');
+  const tc     = document.getElementById('tc');
+  const state  = document.getElementById('state');
+
+  /* key: id -> [start, end, animation-delay scale] */
+  const CUTS = {
+    '20': { dur: 20, scenes: {
+      s1:[0,3.2,1], s2:[3.2,6.4,1], s3:[6.4,12,1], s4:[12,16,1], s5:[16,18.6,1], s6:[18.6,20.01,1] }},
+    '15': { dur: 15, scenes: {
+      s1:[0,2.2,.69], s2:[2.2,4.6,.75], s3:[4.6,9.4,.86], s4:[9.4,12.4,.75],
+      s5:[12.4,14,.62], s6:[14,15.01,.71] }},
+    '6':  { dur: 6, scenes: {
+      s1:[0,1.4,.44], s3:[1.4,4.4,.54], s6:[4.4,6.01,1.14] }}
+  };
+  let cut = '20', TOTAL = 20, t = 0, playing = false, last = performance.now();
+
+  function fit(){
+    const s = Math.min((window.innerWidth - 24) / stage.clientWidth,
+                       (window.innerHeight - 40) / stage.clientHeight);
+    stage.style.transform = 'scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+
+  /* generated waveforms */
+  document.querySelectorAll('[data-wave]').forEach(function(w){
+    const n = +w.dataset.wave;
+    for (let i = 0; i < n; i++){
+      const b = document.createElement('i');
+      b.style.height = (18 + (i * 37) % 46) + 'px';
+      b.style.animationDelay = (i * .07).toFixed(2) + 's';
+      b.style.animationDuration = (.78 + (i % 4) * .11).toFixed(2) + 's';
+      w.appendChild(b);
+    }
+  });
+
+  function setT(v){
+    t = Math.max(0, Math.min(TOTAL, v));
+    for (const s of scenes){
+      const on = t >= +s.dataset.start && t < +s.dataset.end;
+      if (on && !s.classList.contains('on')) s.classList.add('on');
+      else if (!on && s.classList.contains('on')) s.classList.remove('on');
+    }
+    bar.style.width = (t / TOTAL * 100) + '%';
+    tc.textContent = '00:' + String(Math.floor(t)).padStart(2,'0') + '.' + Math.floor((t % 1) * 10);
+  }
+
+  function applyCut(id){
+    cut = id; TOTAL = CUTS[id].dur;
+    scenes.forEach(function(s){
+      const rec = CUTS[id].scenes[s.id];
+      s.style.display = rec ? '' : 'none';
+      if (!rec){ s.classList.remove('on'); s.dataset.start = 999; s.dataset.end = 1000; return; }
+      s.dataset.start = rec[0]; s.dataset.end = rec[1];
+      s.style.setProperty('--k', rec[2]);
+    });
+    label();
+    replay();
+  }
+
+  function label(){ state.textContent = '\u25b6 ' + cut + 's \u00b7 ' + (document.body.classList.contains('v') ? '9:16' : '16:9'); }
+
+  function replay(){
+    scenes.forEach(function(s){ s.classList.remove('on'); });
+    void stage.offsetWidth;            /* reflow so entrance animations restart */
+    t = 0; playing = true; last = performance.now();
+    setT(0);
+  }
+
+  function frame(now){
+    const dt = (now - last) / 1000; last = now;
+    if (playing){
+      t += dt;
+      if (t >= TOTAL){ t = TOTAL; playing = false; state.textContent = '\u21bb replay'; }
+      setT(t);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* controls */
+  state.addEventListener('click', replay);
+  stage.addEventListener('click', function(){ if (!playing) replay(); });
+  barBox.addEventListener('click', function(e){
+    const r = barBox.getBoundingClientRect();
+    setT((e.clientX - r.left) / r.width * TOTAL);
+  });
+  window.addEventListener('keydown', function(e){
+    const k = e.key.toLowerCase();
+    if (k === 'h') document.body.classList.toggle('clean');
+    if (k === 'r') replay();
+    if (k === 'v'){ document.body.classList.toggle('v'); fit(); label(); }
+    if (k === 'c') applyCut(cut === '20' ? '15' : cut === '15' ? '6' : '20');
+    if (k === ' '){
+      e.preventDefault();
+      if (t >= TOTAL) return replay();
+      playing = !playing; last = performance.now();
+      if (playing) label(); else state.textContent = '\u2016 paused';
+    }
+  });
+
+  applyCut('20');
+  fit();
+})();
+</script>
+</body>
+</html>
