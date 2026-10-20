@@ -59,14 +59,21 @@ def create_oauth_state(
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=10)).timestamp()),
     }
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
+    signing_key = (
+        settings.jwt_secret_key if settings.app_env == "test" else settings.oauth_state_secret
+    )
+    return jwt.encode(payload, signing_key, algorithm="HS256")
 
 
 def decode_oauth_state(state_token: str) -> dict:
     try:
         payload = jwt.decode(
             state_token,
-            get_settings().jwt_secret_key,
+            (
+                get_settings().jwt_secret_key
+                if get_settings().app_env == "test"
+                else get_settings().oauth_state_secret
+            ),
             algorithms=["HS256"],
         )
     except jwt.PyJWTError as exc:

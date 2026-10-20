@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite:///./prism_link.db"
     jwt_secret_key: str = DEFAULT_JWT_SECRET
+    oauth_state_secret: str | None = None
     jwt_expire_minutes: int = 60
     public_base_url: str = "http://localhost:8000"
     calendar_provider: Literal["mock", "google"] = "mock"
@@ -59,6 +60,7 @@ class Settings(BaseSettings):
     # loopback; AURORA_RTP_HOST is Aurora's configured local_ip (not external_ip).
     aurora_control_api_url: str = "http://127.0.0.1:8088"
     aurora_control_api_token: str | None = None
+    aurora_event_token: str | None = None
     # Aurora's local_ip is the RTP destination; bind the Pipecat UDP socket to loopback.
     aurora_rtp_host: str | None = None
     aurora_rtp_bind_host: str = "127.0.0.1"
@@ -75,18 +77,45 @@ class Settings(BaseSettings):
 
 
 def validate_runtime_settings(settings: Settings) -> None:
-    """Fail closed when a production deployment has development-grade secrets."""
-    if settings.app_env != "production":
+    """Fail closed when a runtime uses missing, weak, or shared application secrets."""
+    if settings.app_env == "test":
         return
     errors: list[str] = []
-    if settings.jwt_secret_key == DEFAULT_JWT_SECRET or len(settings.jwt_secret_key) < 32:
-        errors.append("JWT_SECRET_KEY must be a unique value of at least 32 characters")
-    if not settings.credential_encryption_key or len(settings.credential_encryption_key) < 32:
+    if (
+        settings.jwt_secret_key == DEFAULT_JWT_SECRET
+        or len(settings.jwt_secret_key) < 32
+        or settings.jwt_secret_key.startswith("replace-with-")
+    ):
+        errors.append("JWT_SECRET_KEY must be a unique random value of at least 32 characters")
+    if (
+        not settings.credential_encryption_key
+        or len(settings.credential_encryption_key) < 32
+        or settings.credential_encryption_key.startswith("replace-with-")
+        or settings.credential_encryption_key == settings.jwt_secret_key
+    ):
         errors.append(
             "CREDENTIAL_ENCRYPTION_KEY must be a separate value of at least 32 characters"
         )
+    if (
+        not settings.oauth_state_secret
+        or len(settings.oauth_state_secret) < 32
+        or settings.oauth_state_secret.startswith("replace-with-")
+        or settings.oauth_state_secret
+        in {settings.jwt_secret_key, settings.credential_encryption_key}
+    ):
+        errors.append(
+            "OAUTH_STATE_SECRET must be an independent random value of at least 32 characters"
+        )
+    if settings.aurora_event_token and len(settings.aurora_event_token) < 32:
+        errors.append("AURORA_EVENT_TOKEN must be at least 32 characters")
+    if (
+        settings.aurora_event_token
+        and settings.aurora_control_api_token
+        and settings.aurora_event_token == settings.aurora_control_api_token
+    ):
+        errors.append("AURORA_EVENT_TOKEN must differ from AURORA_CONTROL_API_TOKEN")
     if errors:
-        raise RuntimeError("Invalid production configuration: " + "; ".join(errors))
+        raise RuntimeError("Invalid runtime configuration: " + "; ".join(errors))
 
 
 @lru_cache

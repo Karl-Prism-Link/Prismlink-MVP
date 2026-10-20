@@ -1,4 +1,5 @@
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
@@ -100,7 +101,7 @@ async def update_service(
     return service
 
 
-@router.delete("/services/{service_id}", status_code=204)
+@router.delete("/services/{service_id}", status_code=204, response_model=None)
 async def delete_service(
     service_id: UUID,
     auth: AuthContext = Depends(get_auth_context),

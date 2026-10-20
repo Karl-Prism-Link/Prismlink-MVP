@@ -26,7 +26,7 @@ and Google Calendar writes, and call cleanup before forwarding customer calls. S
 
 ## Quick start
 
-Requires Python 3.12+.
+Requires Python 3.12+. Before starting the API, copy `.env.example` to `.env` and set distinct random values for `JWT_SECRET_KEY`, `CREDENTIAL_ENCRYPTION_KEY`, and `OAUTH_STATE_SECRET` (each at least 32 characters). Generate them with `python -c "import secrets; print(secrets.token_urlsafe(48))"`; run it three times and store the values only in the ignored `.env` file. The API refuses to start with unset, placeholder, short, or reused keys outside tests.
 
 ```powershell
 python -m venv .venv
