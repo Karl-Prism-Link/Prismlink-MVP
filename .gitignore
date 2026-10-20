@@ -10,6 +10,7 @@ htmlcov/
 .env.*
 !.env.example
 *.db
+prism_link.db*
 *.sqlite3
 *.log
 .DS_Store

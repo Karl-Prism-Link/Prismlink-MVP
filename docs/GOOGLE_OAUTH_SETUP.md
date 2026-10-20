@@ -26,6 +26,7 @@ GOOGLE_CLIENT_ID=<client-id>
 GOOGLE_CLIENT_SECRET=<client-secret>
 GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/api/v1/calendar/google/callback
 CREDENTIAL_ENCRYPTION_KEY=<a-long-random-secret-different-from-JWT_SECRET_KEY>
+OAUTH_STATE_SECRET=<a-long-random-secret-different-from-the-other-two>
 CREDENTIAL_STORE_PATH=.secrets
 ```
 
@@ -64,7 +65,8 @@ It also requests `openid email` so the dashboard can label the connected account
 
 - `calendar_connections.credential_ref` stores only a reference such as `local-google:<tenant UUID>`.
 - OAuth tokens are encrypted in `.secrets/google/`.
-- The encryption key comes from `CREDENTIAL_ENCRYPTION_KEY` (or falls back to `JWT_SECRET_KEY` for development compatibility).
+- The encryption key must be provided separately as `CREDENTIAL_ENCRYPTION_KEY`; it is never derived from the JWT signing key.
+- OAuth state is signed with `OAUTH_STATE_SECRET`, separate from the JWT and credential encryption keys.
 - Access tokens are refreshed automatically using the stored refresh token.
 - Disconnect attempts Google token revocation, deletes the local encrypted token file, and marks the tenant connection disconnected.
 - `.secrets/` is git-ignored.

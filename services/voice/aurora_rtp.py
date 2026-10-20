@@ -102,7 +102,15 @@ def parse_rtp_packet(packet: bytes) -> tuple[int, bytes]:
     return packet[1] & 0x7F, packet[header_length:end]
 
 
-def build_rtp_packet(payload: bytes, *, payload_type: int, sequence: int, timestamp: int, ssrc: int, marker: bool = False) -> bytes:
+def build_rtp_packet(
+    payload: bytes,
+    *,
+    payload_type: int,
+    sequence: int,
+    timestamp: int,
+    ssrc: int,
+    marker: bool = False,
+) -> bytes:
     if not 0 <= payload_type <= 127:
         raise ValueError("RTP payload type must be between 0 and 127")
     header = struct.pack(

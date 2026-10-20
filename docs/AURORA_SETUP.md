@@ -27,11 +27,16 @@ Add these values to the PRISM LINK API process environment (normally its private
 ```dotenv
 AURORA_CONTROL_API_URL=http://127.0.0.1:8088
 AURORA_CONTROL_API_TOKEN=the-same-secret-as-PRISMLINK_API_TOKEN-in-Aurora
+AURORA_EVENT_TOKEN=a-separate-random-bearer-token-for-Aurora-event-callbacks
 AURORA_RTP_HOST=192.168.1.26
 AURORA_RTP_BIND_HOST=127.0.0.1
 AURORA_STARTUP_TIMEOUT_SECONDS=20
 AURORA_MAX_ACTIVE_CALLS=8
 ```
+
+Configure Aurora to send `Authorization: Bearer <AURORA_EVENT_TOKEN>` on each
+callback to `/internal/sip-events`. The API rejects callbacks when this token
+is unset or invalid; source IP and loopback checks are not used for identity.
 
 Set `AURORA_RTP_HOST` to Aurora's `local_ip` from its settings file. It must be
 the local interface address on which Aurora binds its RTP proxy, not the public
@@ -40,9 +45,9 @@ by default) and uses a dynamically allocated UDP port for each call. The PRISM
 LINK API is still bound to `127.0.0.1:8000`, and the Aurora control API stays at
 `127.0.0.1:8088`.
 
-Keep the shared control token private. Do not put it in source control, paste it
-into chat, or expose Aurora's control API to the Internet. Aurora callbacks have
-no signature header, so the receiving API must remain loopback-only.
+Keep both tokens private. Do not put them in source control or paste them into
+chat. Keep Aurora's control API on loopback and restrict network access to the
+callback API to Aurora or its trusted ingress.
 
 ## Call flow
 

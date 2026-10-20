@@ -953,3 +953,18 @@ def test_service_name_cleanup_endpoint_is_conservative(client):
     names = {row["name"] for row in response.json()}
     assert "Men's Cut" in names
     assert "Balayage Deluxe" in names
+
+
+def test_no_content_routes_return_empty_responses(client):
+    token = register(
+        client, name="No Content Salon", slug="no-content-salon", email="no-content@example.com"
+    )
+    service = add_service(client, token)
+
+    deleted = client.delete(f"/api/v1/salon/services/{service['id']}", headers=auth(token))
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+
+    disconnected = client.post("/api/v1/calendar/disconnect", headers=auth(token))
+    assert disconnected.status_code == 204
+    assert disconnected.content == b""

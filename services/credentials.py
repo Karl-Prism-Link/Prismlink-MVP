@@ -29,7 +29,9 @@ class LocalEncryptedCredentialStore:
     def __init__(self) -> None:
         settings = get_settings()
         self.root = Path(settings.credential_store_path)
-        key_material = settings.credential_encryption_key or settings.jwt_secret_key
+        key_material = settings.credential_encryption_key
+        if not key_material:
+            raise CredentialStoreError("CREDENTIAL_ENCRYPTION_KEY is not configured")
         digest = hashlib.sha256(key_material.encode("utf-8")).digest()
         self.fernet = Fernet(base64.urlsafe_b64encode(digest))
 

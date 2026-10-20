@@ -24,6 +24,7 @@ from services.credentials import CredentialStoreError, LocalEncryptedCredentialS
 
 router = APIRouter(prefix="/api/v1/calendar", tags=["calendar"])
 
+
 def _oauth_redirect(state_token: str | None, result: str) -> RedirectResponse:
     target = "/"
     if state_token:
@@ -34,7 +35,6 @@ def _oauth_redirect(state_token: str | None, result: str) -> RedirectResponse:
         except HTTPException:
             pass
     return RedirectResponse(url=f"{target}?calendar={result}", status_code=303)
-
 
 
 @router.get("/status", response_model=CalendarStatusOut | None)
@@ -153,7 +153,7 @@ async def google_oauth_callback(
     return _oauth_redirect(state_token, "connected")
 
 
-@router.post("/disconnect", status_code=204)
+@router.post("/disconnect", status_code=204, response_model=None)
 async def disconnect_calendar(
     auth: AuthContext = Depends(get_auth_context),
     db: DBSession = Depends(get_db),

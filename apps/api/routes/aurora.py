@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import ipaddress
+import hmac
 import logging
 import re
 from dataclasses import dataclass
@@ -11,7 +11,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from core.config import get_settings
@@ -177,15 +177,17 @@ async def _run_call(call_id: str, values: dict[str, Any], session: _CallTask) ->
 
 
 @router.post("/internal/sip-events", status_code=202)
-async def receive_aurora_event(event: AuroraEvent, request: Request) -> dict[str, str]:
+async def receive_aurora_event(
+    event: AuroraEvent, authorization: str | None = Header(default=None)
+) -> dict[str, str]:
     """Receive Aurora callbacks. Keep the API listener bound to loopback."""
-    client_host = request.client.host if request.client else ""
-    try:
-        is_loopback = ipaddress.ip_address(client_host).is_loopback
-    except ValueError:
-        is_loopback = False
-    if not is_loopback and client_host != "100.105.4.49":
-        raise HTTPException(status_code=403, detail="Aurora callback source is not trusted")
+    expected_token = settings.aurora_event_token
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="Aurora event token is not configured")
+    supplied_token = authorization or ""
+    expected_header = f"Bearer {expected_token}"
+    if not hmac.compare_digest(supplied_token.encode("utf-8"), expected_header.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Invalid Aurora event credentials")
     if event.event in {"trunk.registered", "trunk.registration_failed"}:
         log.info("Aurora trunk event: %s status=%s", event.event, event.details.get("status"))
         return {"status": "accepted"}
@@ -211,7 +213,9 @@ async def receive_aurora_event(event: AuroraEvent, request: Request) -> dict[str
             from services.voice.aurora_rtp_transport import AuroraRtpTransport
         except ImportError as exc:
             _schedule_reject(call_id, 503)
-            raise HTTPException(status_code=503, detail="Pipecat voice extra is unavailable") from exc
+            raise HTTPException(
+                status_code=503, detail="Pipecat voice extra is unavailable"
+            ) from exc
 
         async with _active_lock:
             if call_id in _active_calls:
@@ -227,13 +231,13 @@ async def receive_aurora_event(event: AuroraEvent, request: Request) -> dict[str
                     codec=values["codec"],
                     payload_type=values["payload_type"],
                     bind_host=settings.aurora_rtp_bind_host,
-                    start_timeout=max(
-                        30.0, settings.aurora_startup_timeout_seconds + 10.0
-                    ),
+                    start_timeout=max(30.0, settings.aurora_startup_timeout_seconds + 10.0),
                 )
             except (OSError, ValueError) as exc:
                 _schedule_reject(call_id, 503)
-                raise HTTPException(status_code=503, detail="Could not allocate RTP socket") from exc
+                raise HTTPException(
+                    status_code=503, detail="Could not allocate RTP socket"
+                ) from exc
             session = _CallTask(transport=transport)
             _active_calls[call_id] = session
             session.task = asyncio.create_task(_run_call(call_id, values, session))

@@ -29,10 +29,14 @@ VOICE_TURN_LATENCY = Histogram(
     buckets=(0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 6, 10),
 )
 HTTP_REQUESTS = Counter(
-    "http_requests", "HTTP requests by method, route template and status", ["method", "route", "status"]
+    "http_requests",
+    "HTTP requests by method, route template and status",
+    ["method", "route", "status"],
 )
 HTTP_REQUEST_LATENCY = Histogram(
-    "http_request_duration_seconds", "HTTP request duration", ["method", "route"],
+    "http_request_duration_seconds",
+    "HTTP request duration",
+    ["method", "route"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
 )
 
@@ -68,7 +72,6 @@ def record_voice_turn_latency(seconds):
         VOICE_TURN_LATENCY.observe(seconds)
 
 
-
 @contextmanager
 def call_scope():
     CALLS_STARTED.inc()
@@ -94,7 +97,9 @@ def stage_timer(stage_name):
     try:
         yield
     except Exception:
-        service = "deepgram" if stage_name in {"stt", "tts"} else "groq" if stage_name == "llm" else None
+        service = (
+            "deepgram" if stage_name in {"stt", "tts"} else "groq" if stage_name == "llm" else None
+        )
         if service:
             API_ERRORS.labels(service=service).inc()
         raise
@@ -128,7 +133,9 @@ def setup_metrics(app):
             route = request.scope.get("route")
             route_label = getattr(route, "path", "unmatched")
             HTTP_REQUESTS.labels(request.method, route_label, "500").inc()
-            HTTP_REQUEST_LATENCY.labels(request.method, route_label).observe(perf_counter() - started)
+            HTTP_REQUEST_LATENCY.labels(request.method, route_label).observe(
+                perf_counter() - started
+            )
             raise
         route = request.scope.get("route")
         route_label = getattr(route, "path", "unmatched")

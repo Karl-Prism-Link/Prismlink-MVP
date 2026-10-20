@@ -63,22 +63,21 @@ app.include_router(aurora.router)
 
 @app.get("/", include_in_schema=False)
 async def dashboard() -> FileResponse:
-    return FileResponse(Path(__file__).resolve().parents[1] / "dashboard" / "index.html")
+    return FileResponse(
+        Path(__file__).resolve().parents[1] / "dashboard" / "prism-link-dashboard-api-login.html"
+    )
 
 
 @app.get("/dashboard-new", include_in_schema=False)
 async def dashboard_new() -> FileResponse:
     return FileResponse(
-        Path(__file__).resolve().parents[1]
-        / "dashboard"
-        / "prism-link-dashboard-api-login.html"
+        Path(__file__).resolve().parents[1] / "dashboard" / "prism-link-dashboard-api-login.html"
     )
+
 
 @app.get("/dashboard", include_in_schema=False)
 @app.get("/dashboard/", include_in_schema=False)
 async def user_dashboard() -> FileResponse:
     return FileResponse(
-        Path(__file__).resolve().parents[1]
-        / "dashboard"
-        / "prism-link-user-dashboard.html"
+        Path(__file__).resolve().parents[1] / "dashboard" / "prism-link-user-dashboard.html"
     )
