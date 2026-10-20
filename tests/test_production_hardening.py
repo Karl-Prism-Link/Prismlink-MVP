@@ -56,8 +56,32 @@ def test_production_requires_independent_strong_secrets() -> None:
             app_env="production",
             jwt_secret_key="a" * 32,
             credential_encryption_key="b" * 32,
+            oauth_state_secret="c" * 32,
         )
     )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"oauth_state_secret": None},
+        {"oauth_state_secret": "short"},
+        {"oauth_state_secret": "b" * 32},
+        {"metrics_token": "short"},
+        {"metrics_token": "a" * 32},
+    ],
+)
+def test_production_rejects_missing_or_shared_auxiliary_secrets(overrides) -> None:
+    settings = {
+        "_env_file": None,
+        "app_env": "production",
+        "jwt_secret_key": "a" * 32,
+        "credential_encryption_key": "b" * 32,
+        "oauth_state_secret": "c" * 32,
+    } | overrides
+
+    with pytest.raises(RuntimeError, match="must be"):
+        validate_runtime_settings(Settings(**settings))
 
 
 def test_in_memory_rate_limiter_reports_retry_after() -> None:
@@ -84,6 +108,47 @@ async def test_auth_limit_returns_429_with_retry_after(monkeypatch) -> None:
 
     assert exc_info.value.status_code == 429
     assert exc_info.value.headers == {"Retry-After": "60"}
+
+
+@pytest.mark.asyncio
+async def test_auth_limit_keys_on_account_as_well_as_address(monkeypatch) -> None:
+    monkeypatch.setattr(rate_limit, "limiter", InMemoryRateLimiter())
+    monkeypatch.setattr(
+        rate_limit,
+        "get_settings",
+        lambda: Settings(app_env="development", trust_proxy_headers=False),
+    )
+    first = Request({"type": "http", "headers": [], "client": ("198.51.100.10", 1234)})
+    second = Request({"type": "http", "headers": [], "client": ("203.0.113.20", 1234)})
+
+    await rate_limit.limit_login_account(first, "Owner@Salon.test")
+    with pytest.raises(HTTPException) as exc_info:
+        await rate_limit.limit_login_account(second, "owner@salon.test")
+
+    assert exc_info.value.status_code == 429
+
+
+def test_auth_limit_ignores_spoofed_forwarding_header_by_default(monkeypatch) -> None:
+    monkeypatch.setattr(rate_limit, "limiter", InMemoryRateLimiter())
+    monkeypatch.setattr(
+        rate_limit,
+        "get_settings",
+        lambda: Settings(app_env="development", trust_proxy_headers=False),
+    )
+
+    def request_with_forwarded(value: str) -> Request:
+        return Request(
+            {
+                "type": "http",
+                "headers": [(b"x-forwarded-for", value.encode())],
+                "client": ("127.0.0.1", 1234),
+            }
+        )
+
+    assert rate_limit.client_identity(request_with_forwarded("1.1.1.1")) == "127.0.0.1"
+    assert rate_limit.client_identity(request_with_forwarded("1.1.1.1, 198.51.100.10")) != (
+        "1.1.1.1"
+    )
 
 
 def test_request_middleware_adds_correlation_id(client) -> None:

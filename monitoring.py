@@ -1,8 +1,11 @@
+import hmac
 from contextlib import contextmanager
 from time import perf_counter
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
+
+from core.config import get_settings
 
 CALLS_STARTED = Counter("calls_started", "Calls started")
 CALLS_COMPLETED = Counter("calls_completed", "Calls completed")
@@ -144,7 +147,18 @@ def setup_metrics(app):
         return response
 
     @app.get("/metrics", include_in_schema=False)
-    async def metrics():
+    async def metrics(request: Request):
+        settings = get_settings()
+        token = settings.metrics_token
+        if token:
+            supplied = request.headers.get("authorization", "")
+            if not hmac.compare_digest(
+                supplied.encode("utf-8"), f"Bearer {token}".encode("utf-8")
+            ):
+                raise HTTPException(status_code=401, detail="Invalid metrics credentials")
+        elif settings.app_env == "production":
+            # Fail closed: never expose process metrics unauthenticated in production.
+            raise HTTPException(status_code=404, detail="Not found")
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     return app

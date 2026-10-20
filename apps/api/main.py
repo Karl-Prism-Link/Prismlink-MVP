@@ -41,12 +41,16 @@ app = FastAPI(
 setup_metrics(app)
 
 settings = get_settings()
+cors_origins = [settings.public_base_url.rstrip("/")]
+if settings.app_env in {"development", "test"}:
+    # Zero-setup local development only; never added in production.
+    cors_origins.append("http://localhost:8000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.public_base_url, "http://localhost:8000"],
+    allow_origins=sorted(set(cors_origins)),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 app.add_middleware(RequestLoggingMiddleware)
 
