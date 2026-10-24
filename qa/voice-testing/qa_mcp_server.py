@@ -116,6 +116,7 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
 
 def main() -> None:
     for line in sys.stdin:
+        request: dict[str, Any] = {}
         try:
             request = json.loads(line)
             response = handle(request)
