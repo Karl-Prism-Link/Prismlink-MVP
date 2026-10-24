@@ -40,8 +40,10 @@ The runner uses Linphone's file based media mode, so the headless host needs no 
 
 ## Manual systemd runner
 
-After the QA host has the Linphone Python SDK, `espeak-ng`, and `ffmpeg`, install the
-repository at `/opt/prism-link-voice-qa`. Create `/etc/prism-link-voice-qa.env` with only
+Install `espeak-ng` and `ffmpeg`, then install the repository at `/opt/prism-link-voice-qa`.
+Create `/opt/prism-link-voice-qa/.venv` and install an official Linphone Python SDK wheel that
+matches the host's Python version and architecture. The wheel is published by Linphone; the
+Python wrapper supports Linux x86_64. Create `/etc/prism-link-voice-qa.env` with only
 `DEEPGRAM_API_KEY`, owned by `root:prismlink` and mode `0640`. Create the results directory
 owned by `prismlink` with mode `0700`, then install the unit:
 
