@@ -1,0 +1,29 @@
+[Unit]
+Description=Prism Link authenticated voice QA MCP endpoint
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prismlink
+Group=prismlink
+WorkingDirectory=/opt/prism-link-voice-qa/qa/voice-testing
+EnvironmentFile=/etc/prism-link-voice-qa-mcp.env
+Environment=QA_MCP_BIND=127.0.0.1
+Environment=QA_MCP_PORT=8765
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/var/lib/prism-link-voice-qa/venv/bin/python /opt/prism-link-voice-qa/qa/voice-testing/qa_mcp_http.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/var/lib/prism-link-voice-qa/results
+
+[Install]
+WantedBy=multi-user.target
