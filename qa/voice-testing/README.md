@@ -13,9 +13,11 @@ Linphone QA runner -> Aurora SIP/RTP -> Prism Link API -> Pipecat
 ```
 
 The Aurora host must accept SIP and RTP from the QA runner over Tailscale only. The API must be
-configured with the test tenant, Aurora callback/control tokens, and Pipecat provider settings.
-Do not run against a customer tenant. The current runner's default SIP user is `qa`; confirm
-the test environment maps that called user to its dedicated test tenant before placing a call.
+configured with the dedicated QA data and its Aurora callback/control tokens and Pipecat provider
+settings. Luxe Hair & Beauty's tenant slug is `8795`. Because the runner's called SIP user is
+`qa` rather than the salon's full phone number, the isolated QA API must set
+`VOICE_TENANT_SLUG=8795` so the call falls back to Luxe. Do not change the live API's tenant
+setting for this test.
 
 ## T001 vertical slice
 
