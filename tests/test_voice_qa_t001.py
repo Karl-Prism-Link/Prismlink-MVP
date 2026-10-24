@@ -49,9 +49,11 @@ def test_t001_flags_extra_factual_claims_for_review():
 
 
 def test_linphone_target_must_be_aurora_tailscale_ip():
-    assert require_tailscale_target("sip:qa@100.105.4.49:5060")
+    assert require_tailscale_target("sip:02825523645@100.105.4.49:5060")
     for target in (
         "sip:qa@example.com",
+        "sip:qa@100.105.4.49:5060",
+        "sip:02825523645@100.105.4.50:5060",
         "sip:qa@8.8.8.8:5060",
         "sip:qa@192.168.1.10:5060",
     ):
