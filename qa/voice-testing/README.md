@@ -5,8 +5,9 @@ This directory contains the 50 cases from **Testing pack.docx** and the first ex
 ## Call path
 
 Linphone sends a SIP INVITE directly to Aurora's Tailscale address on UDP 5060. Aurora posts
-the call event to the Prism Link API, which starts the Pipecat voice pipeline and returns the
-RTP destination to Aurora. The test call does not dial a telephone number or use the 2talk trunk.
+the call event to the Prism Link API, which resolves Luxe Hair & Beauty by its called number,
+starts the Pipecat voice pipeline, and returns the RTP destination to Aurora. This direct SIP call
+does not use the 2talk trunk or PSTN.
 
 ```text
 Linphone QA runner -> Aurora SIP/RTP -> Prism Link API -> Pipecat
@@ -14,10 +15,9 @@ Linphone QA runner -> Aurora SIP/RTP -> Prism Link API -> Pipecat
 
 The Aurora host must accept SIP and RTP from the QA runner over Tailscale only. The API must be
 configured with the dedicated QA data and its Aurora callback/control tokens and Pipecat provider
-settings. Luxe Hair & Beauty's tenant slug is `8795`. Because the runner's called SIP user is
-`qa` rather than the salon's full phone number, the isolated QA API must set
-`VOICE_TENANT_SLUG=8795` so the call falls back to Luxe. Do not change the live API's tenant
-setting for this test.
+settings. The T001 target is pinned to Luxe Hair & Beauty's assigned number, `02825523645`.
+The API looks up the tenant by the called number; keep the QA data isolated and do not change the
+live API's fallback tenant setting for this test.
 
 ## T001 vertical slice
 
@@ -26,7 +26,7 @@ The runner sends “Hello.” as 8 kHz, 16-bit mono audio, captures the receptio
 Run it on the test host after Linphone's Python SDK, `espeak-ng`, and `ffmpeg` are installed:
 
 ```bash
-export LINPHONE_TARGET_URI='sip:qa@100.105.4.49:5060'
+export LINPHONE_TARGET_URI='sip:02825523645@100.105.4.49:5060'
 set -a
 . /etc/prism-link-voice-qa.env
 set +a
