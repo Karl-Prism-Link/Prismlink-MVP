@@ -82,4 +82,4 @@ The Linphone call has not been run from this development environment. The next s
 
 ## MCP controls
 
-The branch includes a two-tool stdio MCP bridge for reading the QA unit status and starting only the fixed T001 call. It accepts no target or shell arguments. See [`MCP_SETUP.md`](MCP_SETUP.md) for installation and the scoped sudoers rule. The MCP client must run on hpmicro or use an already approved secure stdio bridge; this setup does not expose a network listener or change Cloudflare/SSH access.
+The branch includes a stateless Streamable HTTP MCP endpoint at `https://voice-qa-mcp.prismlink.tech/mcp`, protected by Cloudflare Access Managed OAuth and an allow policy for `karl@prismlink.tech`. Cloudflare's separate hostname and tunnel route are configured; the hpmicro service still needs installation before the endpoint will answer MCP requests. It exposes only `qa_status` and `qa_run_t001`, with no target or shell arguments. See [`MCP_SETUP.md`](MCP_SETUP.md) for installation.
