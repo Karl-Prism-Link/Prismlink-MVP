@@ -2,6 +2,21 @@
 
 This directory contains the 50 cases from **Testing pack.docx** and the first executable SIP test. T001 uses Linphone on the private test network to call Aurora directly, speak the supplied greeting, record the receptionist audio, transcribe it, and check the greeting against the test's pass criteria. No PSTN provider account is needed.
 
+## Call path
+
+Linphone sends a SIP INVITE directly to Aurora's Tailscale address on UDP 5060. Aurora posts
+the call event to the Prism Link API, which starts the Pipecat voice pipeline and returns the
+RTP destination to Aurora. The test call does not dial a telephone number or use the 2talk trunk.
+
+```text
+Linphone QA runner -> Aurora SIP/RTP -> Prism Link API -> Pipecat
+```
+
+The Aurora host must accept SIP and RTP from the QA runner over Tailscale only. The API must be
+configured with the test tenant, Aurora callback/control tokens, and Pipecat provider settings.
+Do not run against a customer tenant. The current runner's default SIP user is `qa`; confirm
+the test environment maps that called user to its dedicated test tenant before placing a call.
+
 ## T001 vertical slice
 
 The runner sends “Hello.” as 8 kHz, 16-bit mono audio, captures the receptionist's audio, and transcribes it with the configured Deepgram key. It reports `PASS`, `FAIL`, `NEEDS_REVIEW`, or `BLOCKED` and saves WAV evidence plus a JSON result. Extra factual claims are sent for review rather than marked as a pass.
