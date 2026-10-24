@@ -78,3 +78,8 @@ python -m pytest -q tests/test_voice_qa_scenarios.py tests/test_voice_qa_t001.py
 ```
 
 The Linphone call has not been run from this development environment. The next step is to install the runner dependencies on the isolated Tailscale host and verify the T001 audio path, then add conversational branches and API-backed assertions for booking tests.
+
+
+## MCP controls
+
+The branch includes a two-tool stdio MCP bridge for reading the QA unit status and starting only the fixed T001 call. It accepts no target or shell arguments. See [`MCP_SETUP.md`](MCP_SETUP.md) for installation and the scoped sudoers rule. The MCP client must run on hpmicro or use an already approved secure stdio bridge; this setup does not expose a network listener or change Cloudflare/SSH access.
