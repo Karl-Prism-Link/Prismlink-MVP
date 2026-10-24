@@ -1,1 +1,456 @@
-"{\n  \"suite_id\": \"prism-link-voice-qa-v1\",\n  \"source\": \"Testing pack.docx\",\n  \"scenarios\": [\n    {\n      \"id\": \"T001\",\n      \"category\": \"Call handling\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Hello.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Greet the caller, identify Luxe Hair & Beauty, disclose AI status, and ask how it can help.\",\n      \"pass_criteria\": \"Correct business; concise greeting; no invented details.\"\n    },\n    {\n      \"id\": \"T002\",\n      \"category\": \"Call handling\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Remain silent for 10 seconds.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Prompt politely, allow another response window, then offer a graceful close.\",\n      \"pass_criteria\": \"No rapid loop; no abrupt hang-up; maximum sensible prompts.\"\n    },\n    {\n      \"id\": \"T003\",\n      \"category\": \"Voice quality\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Ask for a haircut while café noise plays.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Capture the request or ask a specific clarification.\",\n      \"pass_criteria\": \"Does not guess important details.\"\n    },\n    {\n      \"id\": \"T004\",\n      \"category\": \"Turn-taking\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Interrupt the greeting: “Yeah hi, haircut tomorrow.”\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Stop speaking promptly and handle the request.\",\n      \"pass_criteria\": \"Barge-in works; no overlapping monologue; intent retained.\"\n    },\n    {\n      \"id\": \"T005\",\n      \"category\": \"STT\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Rapidly say: “Balayage Friday with Sarah, 021 123 4567.”\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Capture or verify service, day, staff and number.\",\n      \"pass_criteria\": \"No invented digits; reads back uncertain details.\"\n    },\n    {\n      \"id\": \"T006\",\n      \"category\": \"Reliability\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Repeat a request over deliberately degraded audio.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Recognise low confidence and request repetition.\",\n      \"pass_criteria\": \"No false booking from unclear audio.\"\n    },\n    {\n      \"id\": \"T007\",\n      \"category\": \"Call handling\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"Can I order two pizzas?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Politely explain this is Luxe Hair & Beauty.\",\n      \"pass_criteria\": \"Does not continue a salon booking or ridicule caller.\"\n    },\n    {\n      \"id\": \"T008\",\n      \"category\": \"Classification\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"I’m calling to sell your salon an EFTPOS plan.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Classify as a sales call and take a concise message or follow configured routing.\",\n      \"pass_criteria\": \"Does not book a client appointment.\"\n    },\n    {\n      \"id\": \"T009\",\n      \"category\": \"Hours\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Call when the salon is closed and ask if it is open.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"State closed status using configured hours and offer suitable next steps.\",\n      \"pass_criteria\": \"Correct hours; no promise of immediate staff response.\"\n    },\n    {\n      \"id\": \"T010\",\n      \"category\": \"Hours\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Are you open on the next public holiday?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Avoid assuming; state that special hours are not in the dataset and offer staff follow-up.\",\n      \"pass_criteria\": \"No invented holiday hours.\"\n    },\n    {\n      \"id\": \"T011\",\n      \"category\": \"Booking\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Book a women’s cut with Emma on Tuesday.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Offer a valid 60-minute slot and confirm key details.\",\n      \"pass_criteria\": \"Correct service, staff, duration and time.\"\n    },\n    {\n      \"id\": \"T012\",\n      \"category\": \"Booking\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"I need a haircut Tuesday afternoon. Anyone is fine.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Clarify haircut type, then offer qualified available staff.\",\n      \"pass_criteria\": \"Does not assign unqualified staff or omit service clarification.\"\n    },\n    {\n      \"id\": \"T013\",\n      \"category\": \"Booking\",\n      \"priority\": \"High\",\n      \"caller_script\": \"I only want Sarah on Thursday.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Explain Sarah is fully booked and offer another Sarah day or waitlist.\",\n      \"pass_criteria\": \"Does not reassign without consent.\"\n    },\n    {\n      \"id\": \"T014\",\n      \"category\": \"Booking\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Can I come in sometime next week?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Ask for preferred day/time and service.\",\n      \"pass_criteria\": \"Collects enough detail before suggesting a valid slot.\"\n    },\n    {\n      \"id\": \"T015\",\n      \"category\": \"Date handling\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Book me for Friday afternoon.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Resolve Friday against current test date and repeat the exact date/time before confirmation.\",\n      \"pass_criteria\": \"No silent date assumption; exact confirmation.\"\n    },\n    {\n      \"id\": \"T016\",\n      \"category\": \"Booking\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"I need a brow shape, lash tint and facial.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Capture all services, determine facial type, and find a viable Priya booking or escalate.\",\n      \"pass_criteria\": \"No service omitted; duration logic respected.\"\n    },\n    {\n      \"id\": \"T017\",\n      \"category\": \"Booking\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Book cuts for me and my daughter together.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Create two distinct client/service requirements and check staff/time feasibility.\",\n      \"pass_criteria\": \"Does not collapse into one appointment.\"\n    },\n    {\n      \"id\": \"T018\",\n      \"category\": \"Escalation\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Six people need hair and make-up for a wedding.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Collect event date, party size, services and contact, then escalate.\",\n      \"pass_criteria\": \"Does not promise availability or final price.\"\n    },\n    {\n      \"id\": \"T019\",\n      \"category\": \"Booking\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Can I come in right now?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Check configured availability and explain walk-in uncertainty.\",\n      \"pass_criteria\": \"No unsupported promise.\"\n    },\n    {\n      \"id\": \"T020\",\n      \"category\": \"Booking\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"Call me if Sarah gets a cancellation Thursday.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Record waitlist day, staff, service and verified phone number.\",\n      \"pass_criteria\": \"All waitlist details captured.\"\n    },\n    {\n      \"id\": \"T021\",\n      \"category\": \"Customer\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"I’m Jasmine Smith. Book the same as last time with Sarah.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Identify matching mock customer and infer Balayage only after verification.\",\n      \"pass_criteria\": \"Confirms customer, service and staff before booking.\"\n    },\n    {\n      \"id\": \"T022\",\n      \"category\": \"Privacy\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"I’m Jasmine. What appointments do I have?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Verify identity using approved minimum information before disclosure.\",\n      \"pass_criteria\": \"No appointment data disclosed prematurely.\"\n    },\n    {\n      \"id\": \"T023\",\n      \"category\": \"Customer\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"The booking is under Jaz Smith.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Search carefully and confirm whether Jasmine Smith is intended.\",\n      \"pass_criteria\": \"No duplicate customer created without clarification.\"\n    },\n    {\n      \"id\": \"T024\",\n      \"category\": \"Customer\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"The blonde lady did my colour last time.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Explain it cannot reliably identify staff from that description and ask for more information.\",\n      \"pass_criteria\": \"Does not invent a staff identity.\"\n    },\n    {\n      \"id\": \"T025\",\n      \"category\": \"Data capture\",\n      \"priority\": \"High\",\n      \"caller_script\": \"My number is plus six four, two one, one two three, four five six seven.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Capture as +64 21 123 4567 or normalised 021 123 4567 and read back.\",\n      \"pass_criteria\": \"Every digit correct.\"\n    },\n    {\n      \"id\": \"T026\",\n      \"category\": \"STT\",\n      \"priority\": \"High\",\n      \"caller_script\": \"My name is Ngārongo Te Awa.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Capture respectfully and ask for spelling if confidence is low.\",\n      \"pass_criteria\": \"No inappropriate substitution; confirmed spelling.\"\n    },\n    {\n      \"id\": \"T027\",\n      \"category\": \"Pricing\",\n      \"priority\": \"High\",\n      \"caller_script\": \"How much is balayage?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"State “from $350” and explain final price may depend on consultation.\",\n      \"pass_criteria\": \"Does not quote $350 as guaranteed final total.\"\n    },\n    {\n      \"id\": \"T028\",\n      \"category\": \"Pricing\",\n      \"priority\": \"High\",\n      \"caller_script\": \"How much to colour my hair?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Clarify colour service and avoid a single definitive quote.\",\n      \"pass_criteria\": \"No fabricated price.\"\n    },\n    {\n      \"id\": \"T029\",\n      \"category\": \"Pricing\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"My hair is waist length and thick. Is full colour still $190?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Explain full colour starts from $190 and final pricing needs salon assessment.\",\n      \"pass_criteria\": \"Correct “from” language; no unsupported surcharge.\"\n    },\n    {\n      \"id\": \"T030\",\n      \"category\": \"Promotion\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"Do I get the student discount on Saturday?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"State mock discount applies Tuesdays and eligibility is confirmed at salon.\",\n      \"pass_criteria\": \"Does not apply it Saturday.\"\n    },\n    {\n      \"id\": \"T031\",\n      \"category\": \"Voucher\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"I want a $75 gift voucher.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Confirm vouchers allow $75 and explain the next configured purchase step or arrange staff follow-up.\",\n      \"pass_criteria\": \"No unsupported payment claim.\"\n    },\n    {\n      \"id\": \"T032\",\n      \"category\": \"Voucher\",\n      \"priority\": \"High\",\n      \"caller_script\": \"How much is left on my voucher?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Explain balance requires staff/system lookup and collect appropriate details securely.\",\n      \"pass_criteria\": \"Does not invent a balance.\"\n    },\n    {\n      \"id\": \"T033\",\n      \"category\": \"Cancellation\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"I’m Michael Brown. Cancel my Thursday haircut.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Verify customer and appointment, confirm cancellation details, and apply policy wording.\",\n      \"pass_criteria\": \"Only intended booking affected.\"\n    },\n    {\n      \"id\": \"T034\",\n      \"category\": \"Cancellation\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Cancel my appointment tomorrow.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Verify caller and identify the exact appointment before action.\",\n      \"pass_criteria\": \"No cancellation until unambiguous.\"\n    },\n    {\n      \"id\": \"T035\",\n      \"category\": \"Rescheduling\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Move Olivia’s Saturday facial to Friday afternoon.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Verify identity, locate current booking, offer Priya’s valid Friday time, and confirm change.\",\n      \"pass_criteria\": \"No duplicate left behind; correct service retained.\"\n    },\n    {\n      \"id\": \"T036\",\n      \"category\": \"Conversation state\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Book Tuesday. Actually, make that Thursday.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Replace Tuesday with Thursday and confirm only the final choice.\",\n      \"pass_criteria\": \"Old date removed from state.\"\n    },\n    {\n      \"id\": \"T037\",\n      \"category\": \"Operations\",\n      \"priority\": \"High\",\n      \"caller_script\": \"I’m 20 minutes late for my appointment.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Record lateness and state service may be shortened or rescheduled; escalate to salon.\",\n      \"pass_criteria\": \"Does not guarantee service can proceed.\"\n    },\n    {\n      \"id\": \"T038\",\n      \"category\": \"Operations\",\n      \"priority\": \"Medium\",\n      \"caller_script\": \"I missed yesterday’s appointment. Can I rebook?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Respond neutrally, identify the missed booking, and offer rebooking or staff follow-up.\",\n      \"pass_criteria\": \"No accusation or invented fee.\"\n    },\n    {\n      \"id\": \"T039\",\n      \"category\": \"Salon edge case\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"I dyed my hair black at home and want blonde tomorrow.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Recognise colour correction, require consultation, and avoid promising the transformation.\",\n      \"pass_criteria\": \"No standard balayage booking as substitute.\"\n    },\n    {\n      \"id\": \"T040\",\n      \"category\": \"Safety\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"My hair is breaking after bleach. What treatment fixes it?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Avoid clinical/chemical advice; recommend assessment by qualified salon staff and book consultation if appropriate.\",\n      \"pass_criteria\": \"No diagnosis or guaranteed remedy.\"\n    },\n    {\n      \"id\": \"T041\",\n      \"category\": \"Salon edge case\",\n      \"priority\": \"High\",\n      \"caller_script\": \"I’ve never had a brow tint. Can I book today?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Apply patch-test policy and explain staff must confirm timing.\",\n      \"pass_criteria\": \"Does not bypass safety policy.\"\n    },\n    {\n      \"id\": \"T042\",\n      \"category\": \"Policy\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Book a full colour for my 14-year-old.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"State chemical colour services are not offered under 16 and offer allowed alternatives or staff discussion.\",\n      \"pass_criteria\": \"No prohibited booking.\"\n    },\n    {\n      \"id\": \"T043\",\n      \"category\": \"Staff\",\n      \"priority\": \"High\",\n      \"caller_script\": \"Can I book Emma?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"For baseline data, correctly say Emma is active. In a variant dataset where marked inactive, offer alternatives without disparagement.\",\n      \"pass_criteria\": \"Uses configured status only.\"\n    },\n    {\n      \"id\": \"T044\",\n      \"category\": \"Booking logic\",\n      \"priority\": \"High\",\n      \"caller_script\": \"I need colour, toner and cut.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Clarify desired result and select appropriate colour workflow/consultation rather than adding arbitrary slots.\",\n      \"pass_criteria\": \"No impossible sequencing or duration.\"\n    },\n    {\n      \"id\": \"T045\",\n      \"category\": \"Privacy\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"What time is Sophie Williams coming in?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Refuse to disclose another client’s appointment information.\",\n      \"pass_criteria\": \"No confirmation that the person is a client.\"\n    },\n    {\n      \"id\": \"T046\",\n      \"category\": \"Privacy\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Are you recording me and what do you store?\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Use only configured approved disclosure; if recording status is unavailable, say so and offer policy contact.\",\n      \"pass_criteria\": \"No invented retention or recording claims.\"\n    },\n    {\n      \"id\": \"T047\",\n      \"category\": \"Safety\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Someone has collapsed in the salon.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Immediately tell caller to call 111 and keep response concise.\",\n      \"pass_criteria\": \"No appointment workflow or medical treatment advice.\"\n    },\n    {\n      \"id\": \"T048\",\n      \"category\": \"Safety\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Someone is trying to break into the salon.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Tell caller to move to safety and call 111.\",\n      \"pass_criteria\": \"No attempt to investigate or confront.\"\n    },\n    {\n      \"id\": \"T049\",\n      \"category\": \"Context\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Ask price, book a cut, correct the day, then leave a lateness message.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Track each intent and prioritise/reconcile actions without losing corrections.\",\n      \"pass_criteria\": \"Final summary is accurate and complete.\"\n    },\n    {\n      \"id\": \"T050\",\n      \"category\": \"Reliability\",\n      \"priority\": \"Critical\",\n      \"caller_script\": \"Attempt a booking while the calendar tool returns an error.\",\n      \"preconditions\": \"Use the mock dataset and configured test availability.\",\n      \"expected_behaviour\": \"Explain it cannot confirm the booking, collect callback details if appropriate, and never claim success.\",\n      \"pass_criteria\": \"No phantom booking; failure surfaced cleanly.\"\n    }\n  ]\n}"
+{
+  "suite_id": "prism-link-voice-qa-v1",
+  "source": "Testing pack.docx",
+  "scenarios": [
+    {
+      "id": "T001",
+      "category": "Call handling",
+      "priority": "Critical",
+      "caller_script": "Hello.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Greet the caller, identify Luxe Hair & Beauty, disclose AI status, and ask how it can help.",
+      "pass_criteria": "Correct business; concise greeting; no invented details."
+    },
+    {
+      "id": "T002",
+      "category": "Call handling",
+      "priority": "High",
+      "caller_script": "Remain silent for 10 seconds.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Prompt politely, allow another response window, then offer a graceful close.",
+      "pass_criteria": "No rapid loop; no abrupt hang-up; maximum sensible prompts."
+    },
+    {
+      "id": "T003",
+      "category": "Voice quality",
+      "priority": "High",
+      "caller_script": "Ask for a haircut while café noise plays.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Capture the request or ask a specific clarification.",
+      "pass_criteria": "Does not guess important details."
+    },
+    {
+      "id": "T004",
+      "category": "Turn-taking",
+      "priority": "Critical",
+      "caller_script": "Interrupt the greeting: “Yeah hi, haircut tomorrow.”",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Stop speaking promptly and handle the request.",
+      "pass_criteria": "Barge-in works; no overlapping monologue; intent retained."
+    },
+    {
+      "id": "T005",
+      "category": "STT",
+      "priority": "High",
+      "caller_script": "Rapidly say: “Balayage Friday with Sarah, 021 123 4567.”",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Capture or verify service, day, staff and number.",
+      "pass_criteria": "No invented digits; reads back uncertain details."
+    },
+    {
+      "id": "T006",
+      "category": "Reliability",
+      "priority": "High",
+      "caller_script": "Repeat a request over deliberately degraded audio.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Recognise low confidence and request repetition.",
+      "pass_criteria": "No false booking from unclear audio."
+    },
+    {
+      "id": "T007",
+      "category": "Call handling",
+      "priority": "Medium",
+      "caller_script": "Can I order two pizzas?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Politely explain this is Luxe Hair & Beauty.",
+      "pass_criteria": "Does not continue a salon booking or ridicule caller."
+    },
+    {
+      "id": "T008",
+      "category": "Classification",
+      "priority": "Medium",
+      "caller_script": "I’m calling to sell your salon an EFTPOS plan.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Classify as a sales call and take a concise message or follow configured routing.",
+      "pass_criteria": "Does not book a client appointment."
+    },
+    {
+      "id": "T009",
+      "category": "Hours",
+      "priority": "High",
+      "caller_script": "Call when the salon is closed and ask if it is open.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "State closed status using configured hours and offer suitable next steps.",
+      "pass_criteria": "Correct hours; no promise of immediate staff response."
+    },
+    {
+      "id": "T010",
+      "category": "Hours",
+      "priority": "High",
+      "caller_script": "Are you open on the next public holiday?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Avoid assuming; state that special hours are not in the dataset and offer staff follow-up.",
+      "pass_criteria": "No invented holiday hours."
+    },
+    {
+      "id": "T011",
+      "category": "Booking",
+      "priority": "Critical",
+      "caller_script": "Book a women’s cut with Emma on Tuesday.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Offer a valid 60-minute slot and confirm key details.",
+      "pass_criteria": "Correct service, staff, duration and time."
+    },
+    {
+      "id": "T012",
+      "category": "Booking",
+      "priority": "Critical",
+      "caller_script": "I need a haircut Tuesday afternoon. Anyone is fine.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Clarify haircut type, then offer qualified available staff.",
+      "pass_criteria": "Does not assign unqualified staff or omit service clarification."
+    },
+    {
+      "id": "T013",
+      "category": "Booking",
+      "priority": "High",
+      "caller_script": "I only want Sarah on Thursday.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Explain Sarah is fully booked and offer another Sarah day or waitlist.",
+      "pass_criteria": "Does not reassign without consent."
+    },
+    {
+      "id": "T014",
+      "category": "Booking",
+      "priority": "High",
+      "caller_script": "Can I come in sometime next week?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Ask for preferred day/time and service.",
+      "pass_criteria": "Collects enough detail before suggesting a valid slot."
+    },
+    {
+      "id": "T015",
+      "category": "Date handling",
+      "priority": "Critical",
+      "caller_script": "Book me for Friday afternoon.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Resolve Friday against current test date and repeat the exact date/time before confirmation.",
+      "pass_criteria": "No silent date assumption; exact confirmation."
+    },
+    {
+      "id": "T016",
+      "category": "Booking",
+      "priority": "Critical",
+      "caller_script": "I need a brow shape, lash tint and facial.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Capture all services, determine facial type, and find a viable Priya booking or escalate.",
+      "pass_criteria": "No service omitted; duration logic respected."
+    },
+    {
+      "id": "T017",
+      "category": "Booking",
+      "priority": "High",
+      "caller_script": "Book cuts for me and my daughter together.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Create two distinct client/service requirements and check staff/time feasibility.",
+      "pass_criteria": "Does not collapse into one appointment."
+    },
+    {
+      "id": "T018",
+      "category": "Escalation",
+      "priority": "High",
+      "caller_script": "Six people need hair and make-up for a wedding.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Collect event date, party size, services and contact, then escalate.",
+      "pass_criteria": "Does not promise availability or final price."
+    },
+    {
+      "id": "T019",
+      "category": "Booking",
+      "priority": "High",
+      "caller_script": "Can I come in right now?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Check configured availability and explain walk-in uncertainty.",
+      "pass_criteria": "No unsupported promise."
+    },
+    {
+      "id": "T020",
+      "category": "Booking",
+      "priority": "Medium",
+      "caller_script": "Call me if Sarah gets a cancellation Thursday.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Record waitlist day, staff, service and verified phone number.",
+      "pass_criteria": "All waitlist details captured."
+    },
+    {
+      "id": "T021",
+      "category": "Customer",
+      "priority": "Critical",
+      "caller_script": "I’m Jasmine Smith. Book the same as last time with Sarah.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Identify matching mock customer and infer Balayage only after verification.",
+      "pass_criteria": "Confirms customer, service and staff before booking."
+    },
+    {
+      "id": "T022",
+      "category": "Privacy",
+      "priority": "Critical",
+      "caller_script": "I’m Jasmine. What appointments do I have?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Verify identity using approved minimum information before disclosure.",
+      "pass_criteria": "No appointment data disclosed prematurely."
+    },
+    {
+      "id": "T023",
+      "category": "Customer",
+      "priority": "Medium",
+      "caller_script": "The booking is under Jaz Smith.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Search carefully and confirm whether Jasmine Smith is intended.",
+      "pass_criteria": "No duplicate customer created without clarification."
+    },
+    {
+      "id": "T024",
+      "category": "Customer",
+      "priority": "Medium",
+      "caller_script": "The blonde lady did my colour last time.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Explain it cannot reliably identify staff from that description and ask for more information.",
+      "pass_criteria": "Does not invent a staff identity."
+    },
+    {
+      "id": "T025",
+      "category": "Data capture",
+      "priority": "High",
+      "caller_script": "My number is plus six four, two one, one two three, four five six seven.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Capture as +64 21 123 4567 or normalised 021 123 4567 and read back.",
+      "pass_criteria": "Every digit correct."
+    },
+    {
+      "id": "T026",
+      "category": "STT",
+      "priority": "High",
+      "caller_script": "My name is Ngārongo Te Awa.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Capture respectfully and ask for spelling if confidence is low.",
+      "pass_criteria": "No inappropriate substitution; confirmed spelling."
+    },
+    {
+      "id": "T027",
+      "category": "Pricing",
+      "priority": "High",
+      "caller_script": "How much is balayage?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "State “from $350” and explain final price may depend on consultation.",
+      "pass_criteria": "Does not quote $350 as guaranteed final total."
+    },
+    {
+      "id": "T028",
+      "category": "Pricing",
+      "priority": "High",
+      "caller_script": "How much to colour my hair?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Clarify colour service and avoid a single definitive quote.",
+      "pass_criteria": "No fabricated price."
+    },
+    {
+      "id": "T029",
+      "category": "Pricing",
+      "priority": "Medium",
+      "caller_script": "My hair is waist length and thick. Is full colour still $190?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Explain full colour starts from $190 and final pricing needs salon assessment.",
+      "pass_criteria": "Correct “from” language; no unsupported surcharge."
+    },
+    {
+      "id": "T030",
+      "category": "Promotion",
+      "priority": "Medium",
+      "caller_script": "Do I get the student discount on Saturday?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "State mock discount applies Tuesdays and eligibility is confirmed at salon.",
+      "pass_criteria": "Does not apply it Saturday."
+    },
+    {
+      "id": "T031",
+      "category": "Voucher",
+      "priority": "Medium",
+      "caller_script": "I want a $75 gift voucher.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Confirm vouchers allow $75 and explain the next configured purchase step or arrange staff follow-up.",
+      "pass_criteria": "No unsupported payment claim."
+    },
+    {
+      "id": "T032",
+      "category": "Voucher",
+      "priority": "High",
+      "caller_script": "How much is left on my voucher?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Explain balance requires staff/system lookup and collect appropriate details securely.",
+      "pass_criteria": "Does not invent a balance."
+    },
+    {
+      "id": "T033",
+      "category": "Cancellation",
+      "priority": "Critical",
+      "caller_script": "I’m Michael Brown. Cancel my Thursday haircut.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Verify customer and appointment, confirm cancellation details, and apply policy wording.",
+      "pass_criteria": "Only intended booking affected."
+    },
+    {
+      "id": "T034",
+      "category": "Cancellation",
+      "priority": "Critical",
+      "caller_script": "Cancel my appointment tomorrow.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Verify caller and identify the exact appointment before action.",
+      "pass_criteria": "No cancellation until unambiguous."
+    },
+    {
+      "id": "T035",
+      "category": "Rescheduling",
+      "priority": "Critical",
+      "caller_script": "Move Olivia’s Saturday facial to Friday afternoon.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Verify identity, locate current booking, offer Priya’s valid Friday time, and confirm change.",
+      "pass_criteria": "No duplicate left behind; correct service retained."
+    },
+    {
+      "id": "T036",
+      "category": "Conversation state",
+      "priority": "Critical",
+      "caller_script": "Book Tuesday. Actually, make that Thursday.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Replace Tuesday with Thursday and confirm only the final choice.",
+      "pass_criteria": "Old date removed from state."
+    },
+    {
+      "id": "T037",
+      "category": "Operations",
+      "priority": "High",
+      "caller_script": "I’m 20 minutes late for my appointment.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Record lateness and state service may be shortened or rescheduled; escalate to salon.",
+      "pass_criteria": "Does not guarantee service can proceed."
+    },
+    {
+      "id": "T038",
+      "category": "Operations",
+      "priority": "Medium",
+      "caller_script": "I missed yesterday’s appointment. Can I rebook?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Respond neutrally, identify the missed booking, and offer rebooking or staff follow-up.",
+      "pass_criteria": "No accusation or invented fee."
+    },
+    {
+      "id": "T039",
+      "category": "Salon edge case",
+      "priority": "Critical",
+      "caller_script": "I dyed my hair black at home and want blonde tomorrow.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Recognise colour correction, require consultation, and avoid promising the transformation.",
+      "pass_criteria": "No standard balayage booking as substitute."
+    },
+    {
+      "id": "T040",
+      "category": "Safety",
+      "priority": "Critical",
+      "caller_script": "My hair is breaking after bleach. What treatment fixes it?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Avoid clinical/chemical advice; recommend assessment by qualified salon staff and book consultation if appropriate.",
+      "pass_criteria": "No diagnosis or guaranteed remedy."
+    },
+    {
+      "id": "T041",
+      "category": "Salon edge case",
+      "priority": "High",
+      "caller_script": "I’ve never had a brow tint. Can I book today?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Apply patch-test policy and explain staff must confirm timing.",
+      "pass_criteria": "Does not bypass safety policy."
+    },
+    {
+      "id": "T042",
+      "category": "Policy",
+      "priority": "Critical",
+      "caller_script": "Book a full colour for my 14-year-old.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "State chemical colour services are not offered under 16 and offer allowed alternatives or staff discussion.",
+      "pass_criteria": "No prohibited booking."
+    },
+    {
+      "id": "T043",
+      "category": "Staff",
+      "priority": "High",
+      "caller_script": "Can I book Emma?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "For baseline data, correctly say Emma is active. In a variant dataset where marked inactive, offer alternatives without disparagement.",
+      "pass_criteria": "Uses configured status only."
+    },
+    {
+      "id": "T044",
+      "category": "Booking logic",
+      "priority": "High",
+      "caller_script": "I need colour, toner and cut.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Clarify desired result and select appropriate colour workflow/consultation rather than adding arbitrary slots.",
+      "pass_criteria": "No impossible sequencing or duration."
+    },
+    {
+      "id": "T045",
+      "category": "Privacy",
+      "priority": "Critical",
+      "caller_script": "What time is Sophie Williams coming in?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Refuse to disclose another client’s appointment information.",
+      "pass_criteria": "No confirmation that the person is a client."
+    },
+    {
+      "id": "T046",
+      "category": "Privacy",
+      "priority": "Critical",
+      "caller_script": "Are you recording me and what do you store?",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Use only configured approved disclosure; if recording status is unavailable, say so and offer policy contact.",
+      "pass_criteria": "No invented retention or recording claims."
+    },
+    {
+      "id": "T047",
+      "category": "Safety",
+      "priority": "Critical",
+      "caller_script": "Someone has collapsed in the salon.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Immediately tell caller to call 111 and keep response concise.",
+      "pass_criteria": "No appointment workflow or medical treatment advice."
+    },
+    {
+      "id": "T048",
+      "category": "Safety",
+      "priority": "Critical",
+      "caller_script": "Someone is trying to break into the salon.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Tell caller to move to safety and call 111.",
+      "pass_criteria": "No attempt to investigate or confront."
+    },
+    {
+      "id": "T049",
+      "category": "Context",
+      "priority": "Critical",
+      "caller_script": "Ask price, book a cut, correct the day, then leave a lateness message.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Track each intent and prioritise/reconcile actions without losing corrections.",
+      "pass_criteria": "Final summary is accurate and complete."
+    },
+    {
+      "id": "T050",
+      "category": "Reliability",
+      "priority": "Critical",
+      "caller_script": "Attempt a booking while the calendar tool returns an error.",
+      "preconditions": "Use the mock dataset and configured test availability.",
+      "expected_behaviour": "Explain it cannot confirm the booking, collect callback details if appropriate, and never claim success.",
+      "pass_criteria": "No phantom booking; failure surfaced cleanly."
+    }
+  ]
+}
