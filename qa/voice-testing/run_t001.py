@@ -19,15 +19,14 @@ from pathlib import Path
 from t001_assertions import assess_t001
 
 
+T001_TARGET_URI = "sip:02825523645@100.105.4.49:5060"
+
+
 def require_tailscale_target(uri: str) -> str:
-    if not uri.startswith("sip:") or "@" not in uri:
-        raise ValueError("LINPHONE_TARGET_URI must look like sip:qa@100.105.4.49:5060")
-    host_port = uri.rsplit("@", 1)[1].split(";", 1)[0]
-    host = host_port.split(":", 1)[0].strip("[]")
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError as exc:
-        raise ValueError("Direct QA calls must target Aurora's Tailscale IPv4 address.") from exc
+    if uri != T001_TARGET_URI:
+        raise ValueError(f"T001 is pinned to Luxe Hair & Beauty at {T001_TARGET_URI}.")
+    host = uri.rsplit("@", 1)[1].split(";", 1)[0].split(":", 1)[0]
+    address = ipaddress.ip_address(host)
     if address.version != 4 or address not in ipaddress.ip_network("100.64.0.0/10"):
         raise ValueError("Refusing SIP target outside the Tailscale IPv4 range (100.64.0.0/10).")
     return uri
@@ -137,7 +136,7 @@ def transcribe(audio_path: Path, api_key: str) -> str:
 
 
 def run(output_dir: Path, dry_run: bool = False) -> dict[str, object]:
-    target = require_tailscale_target(os.environ.get("LINPHONE_TARGET_URI", ""))
+    target = require_tailscale_target(os.environ.get("LINPHONE_TARGET_URI", T001_TARGET_URI))
     if dry_run:
         return {"test_id": "T001", "status": "READY", "target": target}
 
