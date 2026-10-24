@@ -1,13 +1,26 @@
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
 QA_DIR = Path(__file__).parents[1] / "qa" / "voice-testing"
-sys.path.insert(0, str(QA_DIR))
 
-from run_t001 import require_tailscale_target
-from t001_assertions import assess_t001
+
+def load_qa_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Cannot load QA module: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+assertions = load_qa_module("t001_assertions", QA_DIR / "t001_assertions.py")
+runner = load_qa_module("run_t001", QA_DIR / "run_t001.py")
+assess_t001 = assertions.assess_t001
+require_tailscale_target = runner.require_tailscale_target
 
 
 def test_t001_accepts_expected_greeting():
