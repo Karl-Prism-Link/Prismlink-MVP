@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-SCENARIOS = Path(__file__).parents[1] / "scenarios.json"
+SCENARIOS = Path(__file__).parents[1] / "qa" / "voice-testing" / "scenarios.json"
 
 
 def test_voice_qa_registry_has_all_50_ordered_cases():
