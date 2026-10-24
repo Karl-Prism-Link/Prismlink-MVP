@@ -15,7 +15,7 @@ Environment=HOME=/var/lib/prism-link-voice-qa
 Environment=XDG_CONFIG_HOME=/var/lib/prism-link-voice-qa/config
 Environment=XDG_DATA_HOME=/var/lib/prism-link-voice-qa/data
 Environment=XDG_CACHE_HOME=/var/lib/prism-link-voice-qa/cache
-ExecStart=/opt/prism-link-voice-qa/.venv/bin/python /opt/prism-link-voice-qa/qa/voice-testing/run_t001.py --output-dir /var/lib/prism-link-voice-qa/results
+ExecStart=/var/lib/prism-link-voice-qa/venv/bin/python /opt/prism-link-voice-qa/qa/voice-testing/run_t001.py --output-dir /var/lib/prism-link-voice-qa/results
 TimeoutStartSec=120
 UMask=0077
 NoNewPrivileges=true
