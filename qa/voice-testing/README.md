@@ -10,12 +10,14 @@ Run it on the test host after Linphone's Python SDK, `espeak-ng`, and `ffmpeg` a
 
 ```bash
 export LINPHONE_TARGET_URI='sip:qa@100.105.4.49:5060'
-export DEEPGRAM_API_KEY='set-in-private-environment'
+set -a
+. /etc/prism-link-voice-qa.env
+set +a
 python qa/voice-testing/run_t001.py --dry-run
 python qa/voice-testing/run_t001.py
 ```
 
-Set the API key in a protected environment file on the runner, not in shell history or the repository. The Tailscale IP in the example is Aurora's known address; the runner refuses non-Tailscale targets. Dry run only validates the target and does not place a call.
+Store `DEEPGRAM_API_KEY` in `/etc/prism-link-voice-qa.env` with owner-only read permissions; do not put it in shell history or the repository. The Tailscale IP in the example is Aurora's known address; the runner refuses non-Tailscale targets. Dry run only validates the target and does not place a call.
 
 The runner uses Linphone's file based media mode, so the headless host needs no microphone or speakers. Linphone's Python SDK documents outgoing SIP calls, periodic core iteration, and file based audio input/output. See the official [Python API](https://download.linphone.org/snapshots/docs/liblinphone/latest/python/).
 
