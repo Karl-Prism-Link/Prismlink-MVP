@@ -38,6 +38,25 @@ Store `DEEPGRAM_API_KEY` in `/etc/prism-link-voice-qa.env` with owner-only read 
 
 The runner uses Linphone's file based media mode, so the headless host needs no microphone or speakers. Linphone's Python SDK documents outgoing SIP calls, periodic core iteration, and file based audio input/output. See the official [Python API](https://download.linphone.org/snapshots/docs/liblinphone/latest/python/).
 
+## Manual systemd runner
+
+After the QA host has the Linphone Python SDK, `espeak-ng`, and `ffmpeg`, install the
+repository at `/opt/prism-link-voice-qa`. Create `/etc/prism-link-voice-qa.env` with only
+`DEEPGRAM_API_KEY`, owned by `root:prismlink` and mode `0640`. Create the results directory
+owned by `prismlink` with mode `0700`, then install the unit:
+
+```bash
+sudo install -d -o prismlink -g prismlink -m 0700 /var/lib/prism-link-voice-qa/results
+sudo install -m 0644 qa/voice-testing/prism-link-voice-qa.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start prism-link-voice-qa.service
+sudo journalctl -u prism-link-voice-qa.service -n 80 --no-pager
+```
+
+This is a manual, one-shot unit; it does not start automatically at boot. It calls only
+`02825523645` on Aurora's Tailscale address. Check the API uses the isolated QA database and
+that Aurora's SIP/RTP firewall rules are restricted to the QA runner before starting it.
+
 ## Network and safety requirements
 
 Aurora's current SIP callback handles incoming INVITEs but does not authenticate a caller in that callback. Do not expose this test path to the public internet. Before using it, restrict SIP and RTP access at the host firewall to the runner's Tailscale address, and use Tailscale ACLs to limit which devices can reach Aurora. If this isolation cannot be confirmed, do not run the SIP test path.
