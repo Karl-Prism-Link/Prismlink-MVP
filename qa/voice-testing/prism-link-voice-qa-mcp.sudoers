@@ -1,0 +1,4 @@
+# Install as /etc/sudoers.d/prism-link-voice-qa-mcp (root:root, mode 0440).
+# This grants the QA user only read status and start access to the fixed unit.
+prismlink ALL=(root) NOPASSWD: /usr/bin/systemctl show prism-link-voice-qa.service --property=ActiveState
+prismlink ALL=(root) NOPASSWD: /usr/bin/systemctl start prism-link-voice-qa.service
