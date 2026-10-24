@@ -1,0 +1,24 @@
+[Unit]
+Description=Prism Link manual Linphone voice QA call
+Documentation=https://github.com/Karl-Prism-Link/Prismlink-MVP/tree/codex/automated-voice-qa/qa/voice-testing
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=prismlink
+Group=prismlink
+WorkingDirectory=/opt/prism-link-voice-qa
+Environment=LINPHONE_TARGET_URI=sip:02825523645@100.105.4.49:5060
+EnvironmentFile=/etc/prism-link-voice-qa.env
+ExecStart=/usr/bin/python3 /opt/prism-link-voice-qa/qa/voice-testing/run_t001.py --output-dir /var/lib/prism-link-voice-qa/results
+TimeoutStartSec=120
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prism-link-voice-qa
+
+[Install]
+WantedBy=multi-user.target
