@@ -147,3 +147,42 @@ async def test_live_take_message_persists_inbox_record(client):
         assert rows[0].status == "new"
     finally:
         await db.close()
+
+
+def test_call_transcript_endpoint_is_available_for_all_calls_and_tenant_scoped(client):
+    token = register(
+        client,
+        name="Conversation Log Salon",
+        slug="conversation-log-salon",
+        email="conversation-log@example.com",
+    )
+    other = register(
+        client,
+        name="Private Conversation Salon",
+        slug="private-conversation-salon",
+        email="private-conversation@example.com",
+    )
+    simulated = client.post(
+        "/api/v1/calls/simulate",
+        headers=auth(token),
+        json={
+            "caller_number": "0217777777",
+            "utterance": "Can I book an appointment?",
+        },
+    )
+    assert simulated.status_code == 200, simulated.text
+    call_id = simulated.json()["call"]["id"]
+
+    transcript = client.get(
+        f"/api/v1/calls/{call_id}/transcript", headers=auth(token)
+    )
+    assert transcript.status_code == 200, transcript.text
+    rows = transcript.json()
+    assert [row["speaker"] for row in rows] == ["caller", "assistant"]
+    assert [row["sequence_number"] for row in rows] == [1, 2]
+    assert rows[0]["text"] == "Can I book an appointment?"
+
+    hidden = client.get(
+        f"/api/v1/calls/{call_id}/transcript", headers=auth(other)
+    )
+    assert hidden.status_code == 404
