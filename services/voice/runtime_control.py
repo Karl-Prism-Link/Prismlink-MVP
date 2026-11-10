@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import math
 import re
+import time
+from collections import deque
 from collections.abc import Sequence
 from typing import Any
 
@@ -8,15 +13,79 @@ STATE_MARKER = "PRISM_LINK_STATE:"
 
 
 def parse_retry_delay_seconds(error_text: str, *, default: float = 1.0) -> float:
-    """Extract a short Groq retry delay from a rate-limit error without logging PII."""
+    """Extract Groq retry timing, preserving provider waits up to 30 seconds."""
     text = error_text or ""
-    milliseconds = re.search(r"try again in\s+([0-9]+(?:\.[0-9]+)?)ms", text, re.I)
+    milliseconds = re.search(r"(?:retry-after-ms|try again in)\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)ms", text, re.I)
     if milliseconds:
-        return min(3.0, max(0.25, float(milliseconds.group(1)) / 1000.0))
-    seconds = re.search(r"try again in\s+([0-9]+(?:\.[0-9]+)?)s", text, re.I)
+        return min(30.0, max(0.25, float(milliseconds.group(1)) / 1000.0))
+    seconds = re.search(r"(?:retry-after|try again in)\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)s?", text, re.I)
     if seconds:
-        return min(3.0, max(0.25, float(seconds.group(1))))
-    return min(3.0, max(0.25, default))
+        return min(30.0, max(0.25, float(seconds.group(1))))
+    return min(30.0, max(0.25, default))
+
+
+class ModelCapacityExceeded(RuntimeError):
+    """Raised when a live turn cannot safely fit inside the provider TPM window."""
+
+
+class RollingModelTokenBudget:
+    """Process-wide per-model rolling token admission control for live voice calls.
+
+    Reservations include estimated prompt tokens and the requested completion cap.
+    A small safety margin is kept below the provider's published TPM ceiling.
+    """
+
+    def __init__(
+        self,
+        *,
+        tokens_per_minute: int = 7000,
+        window_seconds: float = 60.0,
+        max_wait_seconds: float = 1.5,
+    ) -> None:
+        self.tokens_per_minute = max(1, int(tokens_per_minute))
+        self.window_seconds = max(1.0, float(window_seconds))
+        self.max_wait_seconds = max(0.0, float(max_wait_seconds))
+        self._usage: dict[str, deque[tuple[float, int]]] = {}
+        self._lock = asyncio.Lock()
+
+    @staticmethod
+    def estimate_request_tokens(params: dict[str, Any]) -> int:
+        payload = {
+            "messages": params.get("messages") or [],
+            "tools": params.get("tools") or [],
+        }
+        serialized = json.dumps(payload, ensure_ascii=False, default=str, separators=(",", ":"))
+        prompt_estimate = math.ceil(len(serialized) / 3.2)
+        completion_cap = params.get("max_completion_tokens") or params.get("max_tokens") or 256
+        return max(1, prompt_estimate + int(completion_cap))
+
+    async def reserve(self, model: str, estimated_tokens: int) -> float:
+        """Reserve a rolling-window budget or fail quickly into safe voice fallback."""
+        tokens = max(1, int(estimated_tokens))
+        if tokens > self.tokens_per_minute:
+            raise ModelCapacityExceeded(
+                f"429 rate_limit_exceeded: estimated request {tokens} exceeds local "
+                f"{self.tokens_per_minute} TPM safety budget for {model}"
+            )
+        started = time.monotonic()
+        deadline = started + self.max_wait_seconds
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                entries = self._usage.setdefault(model, deque())
+                while entries and now - entries[0][0] >= self.window_seconds:
+                    entries.popleft()
+                used = sum(value for _, value in entries)
+                if used + tokens <= self.tokens_per_minute:
+                    entries.append((now, tokens))
+                    return now - started
+                wait_for_capacity = max(0.0, entries[0][0] + self.window_seconds - now)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or wait_for_capacity > remaining:
+                raise ModelCapacityExceeded(
+                    f"429 rate_limit_exceeded: local {model} token budget is temporarily exhausted"
+                )
+            await asyncio.sleep(min(wait_for_capacity, remaining))
 
 
 def is_rate_limit_error(error_text: str) -> bool:

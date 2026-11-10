@@ -79,6 +79,7 @@ from services.voice.runtime_control import (
     compact_context_messages,
     is_generic_booking_request,
     is_rate_limit_error,
+    RollingModelTokenBudget,
     select_latest_caller_text,
 )
 from services.voice.salon_enquiries import (
@@ -104,6 +105,14 @@ from services.voice.stt_context import stt_vocabulary_settings
 from services.voice.tools import VoiceToolset
 
 settings = get_settings()
+
+# One API process hosts concurrent Pipecat calls. Share the budget across those
+# calls, independently for each Groq model, and keep 1,000 TPM below Groq's 8,000 cap.
+_groq_token_budget = RollingModelTokenBudget(
+    tokens_per_minute=7000,
+    window_seconds=60.0,
+    max_wait_seconds=1.5,
+)
 
 transport_params = {
     "webrtc": lambda: TransportParams(audio_in_enabled=True, audio_out_enabled=True),
@@ -253,7 +262,28 @@ async def run_bot(
         from pipecat.services.groq.llm import GroqLLMService
 
         class PrismGroqLLMService(GroqLLMService):
-            """Groq service with low-cost GPT-OSS reasoning defaults for voice."""
+            """Groq service with per-model TPM admission control for live voice."""
+
+            async def get_chat_completions(self, context):
+                adapter = self.get_llm_adapter()
+                invocation_params = adapter.get_llm_invocation_params(
+                    context,
+                    system_instruction=self._settings.system_instruction,
+                    convert_developer_to_user=not self.supports_developer_role,
+                )
+                params = self.build_chat_completion_params(invocation_params)
+                model = str(params.get("model") or self._settings.model)
+                estimate = _groq_token_budget.estimate_request_tokens(params)
+                wait_seconds = await _groq_token_budget.reserve(model, estimate)
+                logger.info(
+                    "PRISM LINK Groq TPM admission model={} estimated_tokens={} wait_ms={}",
+                    model,
+                    estimate,
+                    round(wait_seconds * 1000),
+                )
+                # Reuse Pipecat's provider implementation for timeout and SDK retry
+                # handling after the request has been admitted.
+                return await super().get_chat_completions(context)
 
             def create_client(
                 self,

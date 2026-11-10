@@ -4,12 +4,20 @@ from services.voice.runtime_control import (
     is_generic_booking_request,
     is_rate_limit_error,
     parse_retry_delay_seconds,
+    RollingModelTokenBudget,
+    ModelCapacityExceeded,
 )
 from services.voice.session import VoiceConversationState
 
 
 def test_parse_retry_delay_from_groq_milliseconds():
     assert parse_retry_delay_seconds("Please try again in 877.5ms") == 0.8775
+
+
+def test_retry_delay_respects_provider_wait_beyond_three_seconds():
+    assert parse_retry_delay_seconds("Please try again in 15.1425s") == 15.1425
+    assert parse_retry_delay_seconds("Please try again in 877.5ms") == 0.8775
+    assert parse_retry_delay_seconds("Please try again in 90s") == 30.0
 
 
 def test_rate_limit_detection():
@@ -70,3 +78,47 @@ def test_generic_booking_request_does_not_steal_management_intents():
     )
     for utterance in negatives:
         assert is_generic_booking_request(utterance) is False, utterance
+
+
+def test_rolling_budget_tracks_models_independently():
+    import asyncio
+
+    async def run():
+        budget = RollingModelTokenBudget(tokens_per_minute=1000, max_wait_seconds=0)
+        await budget.reserve("model-a", 800)
+        await budget.reserve("model-b", 800)
+        try:
+            await budget.reserve("model-a", 300)
+        except ModelCapacityExceeded as exc:
+            assert "model-a" in str(exc)
+        else:
+            raise AssertionError("model-a should have exhausted its local budget")
+
+    asyncio.run(run())
+
+
+def test_rolling_budget_rejects_single_request_larger_than_budget():
+    import asyncio
+
+    async def run():
+        budget = RollingModelTokenBudget(tokens_per_minute=1000, max_wait_seconds=0)
+        try:
+            await budget.reserve("model-a", 1001)
+        except ModelCapacityExceeded:
+            return
+        raise AssertionError("oversized request should be rejected before provider call")
+
+    asyncio.run(run())
+
+
+def test_request_token_estimate_includes_completion_reservation():
+    budget = RollingModelTokenBudget(tokens_per_minute=8000)
+    estimate = budget.estimate_request_tokens(
+        {
+            "messages": [{"role": "user", "content": "hello " * 320}],
+            "tools": [{"type": "function", "function": {"name": "book"}}],
+            "max_completion_tokens": 256,
+        }
+    )
+    assert estimate > 256
+    assert estimate >= 320
