@@ -52,5 +52,5 @@ def test_post_action_thanks_has_deterministic_closing_reply():
 def test_v044_runtime_contains_direct_datetime_and_social_fastpaths():
     source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
     assert "service_resolved_datetime" in source
-    assert "deterministic post-action social fastpath" in source
+    assert "deterministic closing/social fastpath" in source
     assert "select_latest_caller_text" in source

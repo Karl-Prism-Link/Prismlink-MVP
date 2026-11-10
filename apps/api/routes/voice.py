@@ -2,6 +2,7 @@ import importlib.util
 
 import httpx
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 
 from apps.api.dependencies import AuthContext, get_auth_context
 from apps.api.schemas import VoiceStatusOut
@@ -50,6 +51,10 @@ async def voice_uat_health(
 ) -> dict:
     """Authenticated, read-only live evidence for the salon UAT console."""
     voice = await voice_status(auth, db)
+    configured_tenant_result = await db.execute(
+        select(Tenant).where(Tenant.slug == settings.voice_tenant_slug)
+    )
+    configured_tenant = configured_tenant_result.scalar_one_or_none()
 
     metrics: dict[str, float] = {}
     aurora_reachable = False
@@ -84,10 +89,14 @@ async def voice_uat_health(
     except (ImportError, ModuleNotFoundError, ValueError):
         pipecat_available = False
 
+    # The UAT console checks the configured voice-test tenant, not the
+    # tenant used to sign into the dashboard. SIP ingress resolves tenants
+    # independently; a dashboard admin login must not make global voice
+    # configuration appear broken.
     voice_configured = bool(
         voice.deepgram_configured
         and voice.llm_configured
-        and voice.tenant_matches
+        and configured_tenant is not None
         and settings.aurora_rtp_host
         and settings.aurora_control_api_token
     )
@@ -115,6 +124,8 @@ async def voice_uat_health(
             "llm_provider": voice.llm_provider,
             "llm_configured": voice.llm_configured,
             "tenant_matches": voice.tenant_matches,
+            "configured_tenant_exists": configured_tenant is not None,
+            "configured_tenant_name": configured_tenant.name if configured_tenant else None,
             "rtp_host_configured": bool(settings.aurora_rtp_host),
             "aurora_control_token_configured": bool(settings.aurora_control_api_token),
         },

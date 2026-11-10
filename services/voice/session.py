@@ -82,6 +82,7 @@ class LiveCallSession:
         self.call: Call | None = None
         self._sequence = 0
         self._finished = False
+        self._closing_acknowledged = False
         self._resolution: CallResolution | None = None
         self._last_transcript: tuple[str, str] | None = None
         self._caller_transcripts: list[str] = []
@@ -96,9 +97,11 @@ class LiveCallSession:
         self._prepared_cancel_fingerprint: str | None = None
         self._rejected_appointment_ids: set[str] = set()
         self._verified_management_phone: str | None = None
+        self._management_phone_digits: str = ""
         self._message_phone_digits: str = ""
         self._prepared_message_fingerprint: str | None = None
         self._prepared_message_payload: dict[str, object] | None = None
+        self._message_readback_completed = False
 
     @property
     def call_id(self) -> UUID | None:
@@ -107,6 +110,13 @@ class LiveCallSession:
     @property
     def resolution(self) -> CallResolution | None:
         return self._resolution
+
+    @property
+    def closing_acknowledged(self) -> bool:
+        return self._closing_acknowledged
+
+    def set_closing_acknowledged(self, value: bool) -> None:
+        self._closing_acknowledged = bool(value)
 
     @property
     def recent_caller_transcripts(self) -> tuple[str, ...]:
@@ -245,6 +255,15 @@ class LiveCallSession:
     def prepare_message(self, fingerprint: str, payload: dict[str, object]) -> None:
         self._prepared_message_fingerprint = fingerprint
         self._prepared_message_payload = dict(payload)
+        self._message_readback_completed = False
+
+    def mark_message_readback_completed(self) -> None:
+        if self.has_prepared_message:
+            self._message_readback_completed = True
+
+    @property
+    def message_readback_completed(self) -> bool:
+        return self._message_readback_completed
 
     @property
     def prepared_message_payload(self) -> dict[str, object] | None:
@@ -264,6 +283,7 @@ class LiveCallSession:
     def clear_prepared_message(self) -> None:
         self._prepared_message_fingerprint = None
         self._prepared_message_payload = None
+        self._message_readback_completed = False
 
     def clear_message_flow(self) -> None:
         self.clear_prepared_message()
@@ -274,6 +294,23 @@ class LiveCallSession:
             "message_callback_phone",
             "message_customer_name",
         )
+
+    @property
+    def management_phone_digits(self) -> str | None:
+        return self._management_phone_digits or None
+
+    def ingest_management_phone_fragment(self, digits: str | None) -> str | None:
+        clean = "".join(ch for ch in str(digits or "") if ch.isdigit())
+        if not clean:
+            return self.management_phone_digits
+        if len(clean) >= 9:
+            self._management_phone_digits = clean[:12]
+        elif len(self._management_phone_digits) < 9 and len(self._management_phone_digits) + len(clean) <= 12:
+            self._management_phone_digits += clean
+        return self.management_phone_digits
+
+    def clear_management_phone(self) -> None:
+        self._management_phone_digits = ""
 
     @property
     def verified_management_phone(self) -> str | None:

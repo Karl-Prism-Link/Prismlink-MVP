@@ -86,11 +86,19 @@ def limit_spoken_questions(text: str) -> str:
     return value[: first + 1].strip()
 
 
+def is_farewell_utterance(text: str | None) -> bool:
+    """Recognise short caller farewells without matching unrelated conversation."""
+    value = re.sub(r"[^a-z]+", " ", str(text or "").casefold()).strip()
+    return bool(re.search(r"\b(bye|goodbye|see you|talk to you later)\b", value))
+
+
 def deterministic_post_action_social_reply(text: str | None) -> str | None:
     """Return a no-LLM closing reply for common post-action social turns."""
     value = re.sub(r"[^a-z]+", " ", str(text or "").casefold()).strip()
     if not value:
         return None
+    if is_farewell_utterance(value):
+        return "Goodbye. Have a great day."
     if value in {
         "thank you",
         "thanks",

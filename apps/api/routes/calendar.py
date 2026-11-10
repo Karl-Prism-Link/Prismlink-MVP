@@ -30,7 +30,7 @@ def _oauth_redirect(state_token: str | None, result: str) -> RedirectResponse:
     if state_token:
         try:
             candidate = decode_oauth_state(state_token).get("return_to")
-            if candidate in {"/", "/dashboard-new"}:
+            if candidate == "/":
                 target = candidate
         except HTTPException:
             pass
@@ -47,7 +47,7 @@ async def calendar_status(
 @router.get("/google/connect", response_model=GoogleOAuthStartOut)
 async def start_google_oauth(
     external_calendar_id: str = Query(default="primary", min_length=1, max_length=256),
-    return_to: str = Query(default="/", pattern=r"^(/|/dashboard-new)$"),
+    return_to: str = Query(default="/", pattern=r"^/$"),
     auth: AuthContext = Depends(get_auth_context),
 ) -> GoogleOAuthStartOut:
     authorization_url = build_authorization_url(

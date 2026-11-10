@@ -8,6 +8,7 @@ from uuid import uuid4
 from loguru import logger
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     AggregatedTextFrame,
     Frame,
@@ -55,6 +56,7 @@ from services.voice.contact import (
     recent_booking_datetime_phrase,
     speak_phone_digits,
 )
+from services.voice.safety import is_health_only_request, is_immediate_emergency_language
 from services.voice.message_routing import (
     callback_message_from_speech,
     extract_inline_message,
@@ -91,6 +93,7 @@ from services.voice.speech_cleanup import (
     booking_success_speech,
     cancellation_success_speech,
     deterministic_post_action_social_reply,
+    is_farewell_utterance,
     is_spoken_question,
     limit_spoken_questions,
     mutation_failure_speech,
@@ -232,7 +235,9 @@ async def run_bot(
         encoding="linear16",
         sample_rate=8000,
         channels=1,
-        endpointing=300,
+        # A 300 ms endpoint split callers mid-sentence during natural pauses.
+        # 650 ms trades a small amount of latency for more complete caller turns.
+        endpointing=650,
         settings=DeepgramSTTService.Settings(
             model=settings.deepgram_stt_model,
             language=settings.deepgram_stt_language,
@@ -568,6 +573,7 @@ async def run_bot(
                     f"Callback number {spoken_phone}. Is that correct?",
                     direction,
                 )
+                call_session.mark_message_readback_completed()
                 logger.info(
                     "PRISM LINK deterministic message prepared target_present={}", bool(target)
                 )
@@ -1071,10 +1077,15 @@ async def run_bot(
             if latest_user and latest_user not in call_session.recent_caller_transcripts:
                 await call_session.append_transcript("caller", latest_user)
 
+            farewell = is_farewell_utterance(latest_user)
+            if call_session.closing_acknowledged:
+                if farewell:
+                    return
+                call_session.set_closing_acknowledged(False)
+
             social_reply = deterministic_post_action_social_reply(latest_user)
-            if (
-                social_reply
-                and call_session.voice_state.confirmed
+            post_action_complete = (
+                call_session.voice_state.confirmed
                 and call_session.voice_state.last_tool_ok is True
                 and call_session.voice_state.last_tool
                 in {
@@ -1083,9 +1094,28 @@ async def run_bot(
                     "cancel_appointment",
                     "take_message",
                 }
-            ):
+            )
+            if social_reply and (post_action_complete or farewell):
                 await self._speak(social_reply, direction)
-                logger.info("PRISM LINK deterministic post-action social fastpath")
+                call_session.set_closing_acknowledged(True)
+                logger.info("PRISM LINK deterministic closing/social fastpath")
+                return
+
+            if is_health_only_request(latest_user):
+                if is_immediate_emergency_language(latest_user):
+                    response = "I can't provide medical help. Please call 111 now."
+                else:
+                    response = (
+                        "I'm sorry that happened. I can't provide medical advice. "
+                        "If you need medical help, please contact a healthcare professional. "
+                        "Is there anything salon-related I can help with?"
+                    )
+                call_session.set_resolution(
+                    "out_of_scope",
+                    "Caller raised a health-related request; the receptionist declined medical guidance.",
+                )
+                await self._speak(response, direction)
+                logger.info("PRISM LINK health-related request safely redirected")
                 return
 
             if await self._handle_common_enquiry(latest_user, direction):
@@ -1687,7 +1717,9 @@ async def run_bot(
     )
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+        user_params=LLMUserAggregatorParams(
+            vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.65))
+        ),
     )
 
     llm_text_processor = LLMTextProcessor()
@@ -1819,6 +1851,7 @@ async def run_bot(
                 "appointment_management",
             }:
                 if is_management_phone_unavailable(message.content):
+                    call_session.clear_management_phone()
                     call_session.update_voice_state(
                         management_phone_unavailable=True,
                         confirmed=False,
@@ -1832,11 +1865,16 @@ async def run_bot(
                 ):
                     call_session.update_voice_state(management_phone_unavailable=False)
                     logger.info("PRISM LINK caller explicitly recovered booking phone")
-                elif (
-                    not call_session.voice_state.management_phone_unavailable
-                    and extract_phone_from_speech(message.content) is not None
-                ):
-                    call_session.update_voice_state(management_phone_unavailable=False)
+                elif not call_session.voice_state.management_phone_unavailable:
+                    full_phone = extract_phone_from_speech(message.content)
+                    phone_fragment = (
+                        full_phone.digits
+                        if full_phone is not None
+                        else extract_phone_digit_fragment(message.content)
+                    )
+                    if phone_fragment:
+                        call_session.ingest_management_phone_fragment(phone_fragment)
+                        call_session.update_voice_state(management_phone_unavailable=False)
             # A clear "no" immediately after appointment lookup rejects that candidate.
             # Keep that fact outside the LLM so the same appointment is not presented
             # repeatedly while the caller describes a different day/date.
@@ -1855,6 +1893,28 @@ async def run_bot(
     async def on_assistant_turn_stopped(_aggregator, message: AssistantTurnStoppedMessage):
         if message.content:
             await call_session.append_transcript("assistant", message.content)
+            prepared_message = call_session.prepared_message_payload
+            if prepared_message:
+                spoken_text = re.sub(r"[^a-z0-9]+", " ", message.content.casefold()).strip()
+                expected_message = re.sub(
+                    r"[^a-z0-9]+", " ", str(prepared_message.get("message") or "").casefold()
+                ).strip()
+                expected_phone = re.sub(
+                    r"[^a-z0-9]+", " ", speak_phone_digits(
+                        str(prepared_message.get("customer_phone") or "")
+                    ).casefold()
+                ).strip()
+                expected_target = re.sub(
+                    r"[^a-z0-9]+", " ", str(prepared_message.get("target_staff") or "").casefold()
+                ).strip()
+                if (
+                    expected_message
+                    and expected_phone
+                    and expected_message in spoken_text
+                    and expected_phone in spoken_text
+                    and (not expected_target or expected_target in spoken_text)
+                ):
+                    call_session.mark_message_readback_completed()
             if call_session.voice_state.intent == "booking":
                 assistant_text = message.content.casefold()
                 if (

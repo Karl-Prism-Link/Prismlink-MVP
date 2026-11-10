@@ -1277,6 +1277,15 @@ class VoiceToolset:
                 return capture.digits
             return None
 
+        buffered_digits = self.call_session.management_phone_digits
+        if buffered_digits:
+            if 9 <= len(buffered_digits) <= 12:
+                self.call_session.verify_management_phone(buffered_digits)
+                return buffered_digits
+            # A partial spoken number is being accumulated. Do not fall back to a
+            # different number mentioned earlier in the conversation.
+            return None
+
         capture = phone_from_recent_transcripts(self.call_session.recent_caller_transcripts)
         if capture is not None:
             self.call_session.verify_management_phone(capture.digits)
@@ -1650,8 +1659,9 @@ class VoiceToolset:
 
         ``confirmed=False`` never persists the message. It stores an exact prepared
         payload in the live session and returns caller-safe readback fields. A later
-        ``confirmed=True`` can submit only that exact prepared payload and only when
-        the latest finalized caller turn is an explicit affirmation.
+        ``confirmed=True`` can submit only that exact prepared payload after the
+        exact message, recipient and callback number have been read back and the
+        latest finalized caller turn is an explicit affirmation.
         """
 
         if confirmed:
@@ -1672,6 +1682,14 @@ class VoiceToolset:
                     "ok": False,
                     "submitted": False,
                     "code": "MESSAGE_PRECHECK_REQUIRED",
+                }
+            if not self.call_session.message_readback_completed:
+                return {
+                    "ok": False,
+                    "submitted": False,
+                    "ready_to_confirm": True,
+                    "code": "MESSAGE_READBACK_REQUIRED",
+                    "instruction": "Read back the exact prepared message, intended recipient, and callback number before asking for or accepting confirmation.",
                 }
             if not is_explicit_affirmation(self.call_session.latest_caller_transcript):
                 return {
@@ -1737,6 +1755,17 @@ class VoiceToolset:
         callback_phone = "".join(ch for ch in str(customer_phone or "") if ch.isdigit())
         name = " ".join(str(customer_name or "Caller").split()).strip()[:160] or "Caller"
         target = " ".join(str(target_staff or "").split()).strip()[:160] or None
+        if target:
+            resolved_target, target_choices = await self._resolve_staff(target)
+            if resolved_target is None:
+                return {
+                    "ok": False,
+                    "submitted": False,
+                    "code": "MESSAGE_RECIPIENT_NOT_CONFIGURED",
+                    "target_staff_choices": target_choices or [],
+                    "instruction": "Do not invent or send to this recipient. Ask whether the caller would like to leave a general message for the salon instead.",
+                }
+            target = resolved_target.name
         if len(safe_message) < 2:
             return {"ok": False, "code": "MESSAGE_REQUIRED", "message": "A message is required."}
         if not (9 <= len(callback_phone) <= 12):

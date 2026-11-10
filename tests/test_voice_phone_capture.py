@@ -38,6 +38,9 @@ def test_recent_transcripts_use_latest_phone_bearing_turn():
 def test_explicit_affirmation_rejects_negation():
     assert is_explicit_affirmation("Yes") is True
     assert is_explicit_affirmation("That's correct") is True
+    assert is_explicit_affirmation("It is") is True
+    assert is_explicit_affirmation("I'm positive") is True
+    assert is_explicit_affirmation("Just move it") is True
     assert is_explicit_affirmation("No, that's not right") is False
 
 

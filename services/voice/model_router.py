@@ -220,6 +220,13 @@ def confirmation_fastpath_action(
         "that is correct",
         "thats correct",
         "that s correct",
+        "it is",
+        "i am positive",
+        "i m positive",
+        "just move it",
+        "move it",
+        "go ahead",
+        "do it",
     }
     bare_rejections = {
         "no",

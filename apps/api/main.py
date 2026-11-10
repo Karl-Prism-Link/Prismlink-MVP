@@ -65,23 +65,11 @@ app.include_router(voice.router)
 app.include_router(aurora.router)
 
 
-@app.get("/dashboard-new", include_in_schema=False)
-async def dashboard_new() -> FileResponse:
-    return FileResponse(
-        Path(__file__).resolve().parents[1] / "dashboard" / "prism-link-dashboard-api-login.html"
-    )
-
-
+@app.get("/", include_in_schema=False)
 @app.get("/dashboard", include_in_schema=False)
 @app.get("/dashboard/", include_in_schema=False)
 async def user_dashboard() -> FileResponse:
     return FileResponse(
-        Path(__file__).resolve().parents[1] / "dashboard" / "prism-link-live-dashboard.html"
-    )
-
-
-@app.get("/dashboard-preview", include_in_schema=False)
-async def dashboard_preview() -> FileResponse:
-    return FileResponse(
-        Path(__file__).resolve().parents[1] / "dashboard" / "prism-link-user-dashboard.html"
+        Path(__file__).resolve().parents[1] / "dashboard" / "prism-link-live-dashboard.html",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache", "Expires": "0"},
     )

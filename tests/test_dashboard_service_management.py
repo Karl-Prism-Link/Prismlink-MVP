@@ -16,18 +16,19 @@ def _register(client):
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def test_dashboard_routes_serve_live_and_preview_pages(client):
-    live = client.get("/dashboard")
+def test_only_root_dashboard_is_served(client):
+    root = client.get("/")
+    dashboard_alias = client.get("/dashboard")
     preview = client.get("/dashboard-preview")
-    login_dashboard = client.get("/dashboard-new")
+    old_login_dashboard = client.get("/dashboard-new")
 
-    assert live.status_code == 200
-    assert "Live salon dashboard" in live.text
-    assert "Create this real appointment" in live.text
-    assert preview.status_code == 200
-    assert "sample activity" in preview.text
-    assert login_dashboard.status_code == 200
-    assert "Customer dashboard" in login_dashboard.text
+    assert root.status_code == 200
+    assert "Live salon dashboard" in root.text
+    assert "Create this real appointment" in root.text
+    assert dashboard_alias.status_code == 200
+    assert dashboard_alias.text == root.text
+    assert preview.status_code == 404
+    assert old_login_dashboard.status_code == 404
 
 
 def test_dashboard_service_price_and_archive_restore(client):

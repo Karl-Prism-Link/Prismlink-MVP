@@ -11,6 +11,7 @@ def _bare_session() -> LiveCallSession:
     session._booking_phone_digits = ""
     session._booking_phone_capture_active = False
     session._booking_spelled_name = None
+    session._management_phone_digits = ""
     return session
 
 
@@ -35,6 +36,13 @@ def test_booking_phone_buffer_replaces_with_complete_fresh_attempt():
     assert session.booking_phone_digits == "021123456"
     session.ingest_booking_phone_fragment("0219876543")
     assert session.booking_phone_digits == "0219876543"
+
+
+def test_management_phone_fragments_are_accumulated():
+    session = _bare_session()
+    assert session.ingest_management_phone_fragment("021") == "021"
+    assert session.ingest_management_phone_fragment("1234567") == "0211234567"
+    assert session.management_phone_digits == "0211234567"
 
 
 def test_explicit_spelled_name_is_recovered():

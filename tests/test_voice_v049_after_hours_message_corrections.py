@@ -89,6 +89,7 @@ async def test_confirmed_message_can_be_corrected_without_duplicate_row(client):
             None,
         )
         assert prepared["ready_to_confirm"] is True
+        live.mark_message_readback_completed()
         await live.append_transcript("caller", "Confirm")
         first = await tools.take_message("", "", None, True, None)
         assert first["submitted"] is True
@@ -101,6 +102,7 @@ async def test_confirmed_message_can_be_corrected_without_duplicate_row(client):
             None,
         )
         assert corrected["ready_to_confirm"] is True
+        live.mark_message_readback_completed()
         await live.append_transcript("caller", "Yes")
         second = await tools.take_message("", "", None, True, None)
         assert second["submitted"] is True

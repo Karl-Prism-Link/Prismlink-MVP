@@ -263,7 +263,7 @@ def is_explicit_affirmation(text: str | None) -> bool:
         return False
     return bool(
         re.search(
-            r"\b(yes|yep|yeah|correct|confirm|confirmed|right|sounds good|please do|that is correct|thats correct)\b",
+            r"\b(yes|yep|yeah|correct|confirm|confirmed|right|sounds good|please do|that is correct|thats correct|it is|i am positive|i m positive|just move it|move it|go ahead|do it)\b",
             value,
         )
     )

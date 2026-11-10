@@ -133,6 +133,7 @@ async def test_live_take_message_persists_inbox_record(client):
         assert prepared["ready_to_confirm"] is True
         assert await MessageRepository(db, tenant.id).list() == []
 
+        live.mark_message_readback_completed()
         await live.append_transcript("caller", "Yes")
         result = await tools.take_message("", "", None, True)
         assert result["ok"] is True

@@ -54,7 +54,7 @@ def create_oauth_state(
         "tenant_id": str(tenant_id),
         "user_id": str(user_id),
         "external_calendar_id": external_calendar_id,
-        "return_to": return_to if return_to in {"/", "/dashboard-new"} else "/",
+        "return_to": return_to if return_to == "/" else "/",
         "nonce": token_urlsafe(24),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=10)).timestamp()),

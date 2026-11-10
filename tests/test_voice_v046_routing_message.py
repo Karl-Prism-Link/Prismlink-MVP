@@ -11,6 +11,8 @@ from services.voice.message_routing import (
     routing_fallback_speech,
 )
 from services.voice.model_router import confirmation_fastpath_action
+from services.voice.safety import is_health_only_request, is_immediate_emergency_language
+from services.voice.speech_cleanup import deterministic_post_action_social_reply, is_farewell_utterance
 from services.voice.session import LiveCallSession
 from services.voice.tools import VoiceToolset
 
@@ -41,6 +43,20 @@ def test_staff_match_is_configured_and_conservative():
     assert match_configured_staff_name("Jo", staff) == "Jo"
     assert match_configured_staff_name("Sarah King", staff) == "Sarah King"
     assert match_configured_staff_name("Alex", staff) is None
+
+
+def test_farewell_is_recognised_and_does_not_repeat_a_long_closing():
+    assert is_farewell_utterance("Thanks, bye.") is True
+    assert deterministic_post_action_social_reply("Thanks, bye.") == "Goodbye. Have a great day."
+
+
+def test_health_only_requests_are_never_routed_as_medical_advice():
+    assert is_health_only_request("I cut my finger") is True
+    assert is_health_only_request("What should I do about this injury?") is True
+    assert is_health_only_request("I am sick and need to cancel my appointment") is False
+    assert is_health_only_request("I need to book a haircut") is False
+    assert is_immediate_emergency_language("I can't breathe") is True
+    assert is_immediate_emergency_language("I cut my finger") is False
 
 
 def test_message_request_and_inline_message_are_detected():
@@ -80,12 +96,16 @@ def test_v046_runtime_has_deterministic_routing_and_message_paths():
 
 
 async def test_message_tool_requires_prepare_and_fresh_yes(client):
-    register(
+    token = register(
         client,
         name="Routing Message Salon",
         slug="routing-message-salon",
         email="routing-message@example.com",
     )
+    staff_response = client.post(
+        "/api/v1/salon/staff", headers={"Authorization": f"Bearer {token}"}, json={"name": "Jo"}
+    )
+    assert staff_response.status_code == 201, staff_response.text
     db = DBSession()
     try:
         tenant = await TenantRepository(db).by_slug("routing-message-salon")
@@ -104,6 +124,12 @@ async def test_message_tool_requires_prepare_and_fresh_yes(client):
         assert missing["ok"] is False
         assert missing["code"] == "MESSAGE_PRECHECK_REQUIRED"
 
+        invented = await tools.take_message(
+            "Please send this to the emergency team", "0271234567", "Karl", False, "Emergency"
+        )
+        assert invented["ok"] is False
+        assert invented["code"] == "MESSAGE_RECIPIENT_NOT_CONFIGURED"
+
         prepared = await tools.take_message(
             "Please call me back about my appointment",
             "0271234567",
@@ -117,8 +143,9 @@ async def test_message_tool_requires_prepare_and_fresh_yes(client):
 
         no_yes = await tools.take_message("", "", None, True, "Jo")
         assert no_yes["ok"] is False
-        assert no_yes["code"] == "CONFIRMATION_REQUIRED"
+        assert no_yes["code"] == "MESSAGE_READBACK_REQUIRED"
 
+        live.mark_message_readback_completed()
         await live.append_transcript("caller", "Yes")
         submitted = await tools.take_message("", "", None, True, "Jo")
         assert submitted["ok"] is True

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import ipaddress
 import logging
 import re
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from core.config import get_settings
@@ -178,16 +179,31 @@ async def _run_call(call_id: str, values: dict[str, Any], session: _CallTask) ->
 
 @router.post("/internal/sip-events", status_code=202)
 async def receive_aurora_event(
-    event: AuroraEvent, authorization: str | None = Header(default=None)
+    event: AuroraEvent,
+    request: Request,
+    authorization: str | None = Header(default=None),
 ) -> dict[str, str]:
-    """Receive Aurora callbacks. Keep the API listener bound to loopback."""
+    """Accept callbacks only from Aurora over the private Tailscale interface.
+
+    Current Aurora builds identify themselves by their stable Tailscale source IP
+    and do not yet attach a callback bearer token. If an event token is configured,
+    additionally require it; never accept callbacks from arbitrary network clients.
+    """
+    client_host = request.client.host if request.client else ""
+    try:
+        source_ip = ipaddress.ip_address(client_host)
+        trusted_source = source_ip.is_loopback or client_host == "100.105.4.49"
+    except ValueError:
+        trusted_source = False
+    if not trusted_source:
+        raise HTTPException(status_code=403, detail="Aurora callback source is not trusted")
+
     expected_token = settings.aurora_event_token
-    if not expected_token:
-        raise HTTPException(status_code=503, detail="Aurora event token is not configured")
-    supplied_token = authorization or ""
-    expected_header = f"Bearer {expected_token}"
-    if not hmac.compare_digest(supplied_token.encode("utf-8"), expected_header.encode("utf-8")):
-        raise HTTPException(status_code=401, detail="Invalid Aurora event credentials")
+    if expected_token:
+        supplied_token = authorization or ""
+        expected_header = f"Bearer {expected_token}"
+        if not hmac.compare_digest(supplied_token.encode("utf-8"), expected_header.encode("utf-8")):
+            raise HTTPException(status_code=401, detail="Invalid Aurora event credentials")
     if event.event in {"trunk.registered", "trunk.registration_failed"}:
         log.info("Aurora trunk event: %s status=%s", event.event, event.details.get("status"))
         return {"status": "accepted"}
