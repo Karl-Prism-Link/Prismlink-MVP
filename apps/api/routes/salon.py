@@ -9,6 +9,7 @@ from apps.api.schemas import (
     BusinessHourOut,
     ServiceCreate,
     ServiceOut,
+    ServicePatch,
     StaffCreate,
     StaffOut,
     TenantOut,
@@ -83,7 +84,7 @@ async def create_service(
 @router.patch("/services/{service_id}", response_model=ServiceOut)
 async def update_service(
     service_id: UUID,
-    payload: ServiceCreate,
+    payload: ServicePatch,
     auth: AuthContext = Depends(get_auth_context),
     db: DBSession = Depends(get_db),
 ) -> Service:
@@ -91,10 +92,15 @@ async def update_service(
     service = await ServiceRepository(db, auth.tenant_id).get(service_id)
     if service is None:
         raise HTTPException(status_code=404, detail="Service not found")
-    service.name = canonical_service_name(payload.name)
-    service.description = payload.description
-    service.duration_minutes = payload.duration_minutes
-    service.price = payload.price
+    changes = payload.model_dump(exclude_unset=True)
+    if "name" in changes and changes["name"] is not None:
+        service.name = canonical_service_name(changes["name"])
+    for field in ("description", "price"):
+        if field in changes:
+            setattr(service, field, changes[field])
+    for field in ("duration_minutes", "is_active"):
+        if field in changes and changes[field] is not None:
+            setattr(service, field, changes[field])
     service.updated_at = utcnow()
     await db.commit()
     await db.refresh(service)

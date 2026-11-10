@@ -54,6 +54,15 @@ class ServiceCreate(BaseModel):
     price: int | None = Field(default=None, ge=0, le=100000)
 
 
+class ServicePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    description: str | None = Field(default=None, max_length=1000)
+    duration_minutes: int | None = Field(default=None, ge=5, le=480)
+    # Stored as integer cents; the dashboard formats this as NZD.
+    price: int | None = Field(default=None, ge=0, le=100000)
+    is_active: bool | None = None
+
+
 class ServiceOut(APIModel):
     id: UUID
     name: str
