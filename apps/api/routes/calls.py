@@ -10,10 +10,13 @@ from apps.api.schemas import (
     CallSimulateIn,
     CallSummaryOut,
     SimulatedCallOut,
+    TranscriptMessageOut,
 )
 from apps.voice.runtime import SalonIntentClassifier
 from database.models import Call, CallSummary, SalonMessage, Tenant, TranscriptMessage
-from database.repositories import BusinessHoursRepository, CallRepository, ServiceRepository
+from database.repositories import (
+    BusinessHoursRepository, CallRepository, MessageRepository, ServiceRepository,
+)
 from database.session import DBSession, get_db
 from database.utils import utcnow
 from services.booking import BookingService
@@ -69,6 +72,28 @@ async def get_call(
     if row is None:
         raise HTTPException(status_code=404, detail="Call not found")
     return to_call_out(row, await repo.summary(call_id))
+
+
+@router.get("/{call_id}/transcript", response_model=list[TranscriptMessageOut])
+async def get_call_transcript(
+    call_id: UUID,
+    auth: AuthContext = Depends(get_auth_context),
+    db: DBSession = Depends(get_db),
+) -> list[TranscriptMessageOut]:
+    """Return the ordered conversation for a call owned by the authenticated salon."""
+    call = await CallRepository(db, auth.tenant_id).get(call_id)
+    if call is None:
+        raise HTTPException(status_code=404, detail="Call not found")
+    rows = await MessageRepository(db, auth.tenant_id).transcript(call_id)
+    return [
+        TranscriptMessageOut(
+            speaker=row.speaker,
+            text=row.text,
+            sequence_number=row.sequence_number,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
 
 
 @router.post("/simulate", response_model=SimulatedCallOut)
