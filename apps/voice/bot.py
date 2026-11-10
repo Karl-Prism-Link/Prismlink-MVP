@@ -1721,8 +1721,8 @@ async def run_bot(
     )
     worker = PipelineWorker(
         pipeline,
+        observers=[latency_observer],
         params=PipelineParams(
-            observers=[latency_observer],
             enable_metrics=True,
             enable_usage_metrics=True,
         ),
