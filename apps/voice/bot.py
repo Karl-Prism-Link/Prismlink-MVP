@@ -69,6 +69,7 @@ from services.voice.message_routing import (
 )
 from services.voice.model_router import (
     ModelTier,
+    flatten_tool_result_messages,
     confirmation_fastpath_action,
     route_voice_turn,
 )
@@ -305,6 +306,8 @@ async def run_bot(
                     if decision.tier is ModelTier.FAST
                     else settings.groq_reasoning_model
                 )
+                if after_tool_result and not decision.use_tools:
+                    params["messages"] = flatten_tool_result_messages(messages)
                 params["model"] = model
                 if not decision.use_tools:
                     params.pop("tools", None)

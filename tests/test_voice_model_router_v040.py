@@ -2,6 +2,7 @@ from services.voice.contact import is_explicit_affirmation, is_explicit_rejectio
 from services.voice.model_router import (
     ModelTier,
     confirmation_fastpath_action,
+    flatten_tool_result_messages,
     route_voice_turn,
 )
 from services.voice.speech_cleanup import booking_success_speech
@@ -26,6 +27,36 @@ def test_social_turn_uses_fast_model_without_tools():
     result = decision(latest_user_text="Thanks")
     assert result.tier is ModelTier.FAST
     assert result.use_tools is False
+
+
+def test_tool_readback_flattens_tool_control_flow_before_no_tool_completion():
+    messages = [
+        {"role": "system", "content": "You are a receptionist."},
+        {"role": "user", "content": "Check Wednesday at nine."},
+        {
+            "role": "assistant",
+            "tool_calls": [{
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "check_availability", "arguments": "{}"},
+            }],
+        },
+        {"role": "tool", "name": "check_availability", "content": "Wednesday 9 AM is available."},
+    ]
+    result = flatten_tool_result_messages(messages)
+    assert not any(message.get("role") == "tool" for message in result)
+    assert not any(message.get("tool_calls") for message in result)
+    assert result[1] == messages[1]
+    assert result[-1]["role"] == "system"
+    assert "Wednesday 9 AM is available" in result[-1]["content"]
+    assert "Do not call tools" in result[-1]["content"]
+
+
+def test_tool_enabled_turn_keeps_existing_model_routing():
+    fast = decision(intent="message", latest_user_text="message the salon")
+    reasoning = decision(intent="booking", latest_user_text="Monday at two")
+    assert fast.tier is ModelTier.FAST and fast.use_tools is True
+    assert reasoning.tier is ModelTier.REASONING and reasoning.use_tools is True
 
 
 def test_booking_date_time_uses_reasoning_model():
