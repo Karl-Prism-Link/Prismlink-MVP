@@ -56,6 +56,7 @@ from services.voice.contact import (
     recent_booking_datetime_phrase,
     speak_phone_digits,
 )
+from services.voice.safety import is_health_only_request, is_immediate_emergency_language
 from services.voice.message_routing import (
     callback_message_from_speech,
     extract_inline_message,
@@ -70,18 +71,17 @@ from services.voice.message_routing import (
 )
 from services.voice.model_router import (
     ModelTier,
-    confirmation_fastpath_action,
     flatten_tool_result_messages,
+    confirmation_fastpath_action,
     route_voice_turn,
 )
 from services.voice.runtime_control import (
-    RollingModelTokenBudget,
     compact_context_messages,
     is_generic_booking_request,
     is_rate_limit_error,
+    RollingModelTokenBudget,
     select_latest_caller_text,
 )
-from services.voice.safety import is_health_only_request, is_immediate_emergency_language
 from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     is_business_hours_question,
@@ -1073,4 +1073,228 @@ async def run_bot(
                     await self._speak(
                         f"I have {speak_phone_digits(digits)}. Please give me the rest of the phone number.",
                         direction,
- 
+                    )
+                else:
+                    await self._speak(
+                        "I didn't catch a phone number. Please say it digit by digit.", direction
+                    )
+                return True
+
+            return False
+
+        async def process_frame(self, frame: Frame, direction: FrameDirection):
+            await super().process_frame(frame, direction)
+            if not isinstance(frame, LLMContextFrame):
+                await self.push_frame(frame, direction)
+                return
+
+            messages = frame.context.get_messages()
+            context_latest_user = next(
+                (
+                    str(message.get("content") or "")
+                    for message in reversed(messages)
+                    if message.get("role") == "user"
+                ),
+                "",
+            )
+            latest_user = select_latest_caller_text(
+                context_latest_user,
+                call_session.recent_caller_transcripts,
+            )
+            # Keep the deterministic guard correct even if Pipecat's event callback and
+            # LLMContextFrame arrive in either order. Never append a known older context
+            # turn over a newer session transcript.
+            if latest_user and latest_user not in call_session.recent_caller_transcripts:
+                await call_session.append_transcript("caller", latest_user)
+
+            farewell = is_farewell_utterance(latest_user)
+            if call_session.closing_acknowledged:
+                if farewell:
+                    return
+                call_session.set_closing_acknowledged(False)
+
+            social_reply = deterministic_post_action_social_reply(latest_user)
+            post_action_complete = (
+                call_session.voice_state.confirmed
+                and call_session.voice_state.last_tool_ok is True
+                and call_session.voice_state.last_tool
+                in {
+                    "book_appointment",
+                    "reschedule_appointment",
+                    "cancel_appointment",
+                    "take_message",
+                }
+            )
+            if social_reply and (post_action_complete or farewell):
+                await self._speak(social_reply, direction)
+                call_session.set_closing_acknowledged(True)
+                logger.info("PRISM LINK deterministic closing/social fastpath")
+                return
+
+            if is_health_only_request(latest_user):
+                if is_immediate_emergency_language(latest_user):
+                    response = "I can't provide medical help. Please call 111 now."
+                else:
+                    response = (
+                        "I'm sorry that happened. I can't provide medical advice. "
+                        "If you need medical help, please contact a healthcare professional. "
+                        "Is there anything salon-related I can help with?"
+                    )
+                call_session.set_resolution(
+                    "out_of_scope",
+                    "Caller raised a health-related request; the receptionist declined medical guidance.",
+                )
+                await self._speak(response, direction)
+                logger.info("PRISM LINK health-related request safely redirected")
+                return
+
+            if await self._handle_common_enquiry(latest_user, direction):
+                return
+            if await self._handle_routing_and_message(latest_user, direction):
+                return
+            if await self._handle_booking_partial_capture(latest_user, direction):
+                return
+            if await self._handle_booking_contact_capture(latest_user, direction):
+                return
+
+            action = confirmation_fastpath_action(
+                latest_user_text=latest_user,
+                has_prepared_booking=call_session.has_prepared_booking,
+                has_prepared_reschedule=call_session.has_prepared_reschedule,
+                has_prepared_cancel=call_session.has_prepared_cancel,
+                has_prepared_message=call_session.has_prepared_message,
+                is_affirmation=is_explicit_affirmation(latest_user),
+                is_rejection=is_explicit_rejection(latest_user),
+            )
+            if action is None:
+                await self.push_frame(frame, direction)
+                return
+
+            logger.info("PRISM LINK deterministic confirmation fastpath action={}", action)
+
+            if action == "booking_confirm":
+                result = await tools.book_appointment("", "", "", "", True, None, None)
+                call_session.update_voice_state(
+                    appointment_id=result.get("appointment_id"),
+                    service=result.get("service"),
+                    starts_at=result.get("starts_at"),
+                    customer_name=result.get("customer_name"),
+                    customer_phone=result.get("customer_phone"),
+                    confirmed=result.get("booked") is True,
+                    last_tool="book_appointment",
+                    last_tool_ok=result.get("ok"),
+                )
+                if result.get("ok") is True and result.get("booked") is True:
+                    await self._speak(booking_success_speech(result), direction)
+                else:
+                    await self._speak(mutation_failure_speech(result, action="book"), direction)
+                return
+
+            if action == "reschedule_confirm":
+                state = call_session.voice_state
+                result = await tools.reschedule_appointment(
+                    str(state.appointment_id or ""),
+                    str(state.starts_at or ""),
+                    True,
+                    state.caller_time_phrase,
+                )
+                call_session.update_voice_state(
+                    service=result.get("service"),
+                    starts_at=result.get("starts_at"),
+                    appointment_id=result.get("appointment_id"),
+                    confirmed=result.get("rescheduled") is True,
+                    last_tool="reschedule_appointment",
+                    last_tool_ok=result.get("ok"),
+                )
+                if result.get("ok") is True and result.get("rescheduled") is True:
+                    await self._speak(reschedule_success_speech(result), direction)
+                else:
+                    await self._speak(
+                        mutation_failure_speech(result, action="reschedule"), direction
+                    )
+                return
+
+            if action == "cancel_confirm":
+                state = call_session.voice_state
+                result = await tools.cancel_appointment(str(state.appointment_id or ""), True)
+                call_session.update_voice_state(
+                    service=result.get("service"),
+                    starts_at=result.get("starts_at"),
+                    appointment_id=result.get("appointment_id"),
+                    confirmed=result.get("cancelled") is True,
+                    last_tool="cancel_appointment",
+                    last_tool_ok=result.get("ok"),
+                )
+                if result.get("ok") is True and result.get("cancelled") is True:
+                    await self._speak(cancellation_success_speech(result), direction)
+                else:
+                    await self._speak(mutation_failure_speech(result, action="cancel"), direction)
+                return
+
+            if action == "message_confirm":
+                state = call_session.voice_state
+                result = await tools.take_message("", "", None, True, state.message_target)
+                call_session.update_voice_state(
+                    confirmed=result.get("submitted") is True,
+                    last_tool="take_message",
+                    last_tool_ok=result.get("ok"),
+                )
+                if result.get("ok") is True and result.get("submitted") is True:
+                    target = str(result.get("target_staff") or "").strip()
+                    if target:
+                        await self._speak(f"I've left your message for {target}.", direction)
+                    else:
+                        await self._speak("I've left your message for the salon.", direction)
+                else:
+                    await self._speak(
+                        "I couldn't safely submit that message. I can try taking it again.",
+                        direction,
+                    )
+                return
+
+            if action == "message_reject":
+                target = call_session.voice_state.message_target
+                call_session.clear_prepared_message()
+                call_session.clear_message_phone()
+                call_session.clear_voice_state_fields("message_text")
+                call_session.update_voice_state(
+                    intent="message", message_target=target, confirmed=False
+                )
+                target_phrase = f" for {target}" if target else ""
+                await self._speak(
+                    f"Okay. What message would you like me to leave{target_phrase}?", direction
+                )
+                return
+
+            if action == "booking_reject":
+                call_session.clear_prepared_booking()
+                call_session.update_voice_state(confirmed=False)
+                await self._speak("Okay. What would you like to change?", direction)
+                return
+
+            if action == "reschedule_reject":
+                call_session.clear_prepared_reschedule()
+                call_session.clear_voice_state_fields("caller_time_phrase", "starts_at")
+                call_session.update_voice_state(confirmed=False, intent="reschedule")
+                await self._speak("Okay. What time would you prefer instead?", direction)
+                return
+
+            if action == "cancel_reject":
+                call_session.clear_prepared_cancel()
+                call_session.update_voice_state(confirmed=False, intent="appointment_management")
+                await self._speak(
+                    "Okay, I won't cancel it. Is there anything else I can help with?", direction
+                )
+                return
+
+            await self.push_frame(frame, direction)
+
+    confirmation_gate = DeterministicConfirmationGate()
+
+    def _tool_args(params: FunctionCallParams, tool_name: str, allowed: set[str]) -> dict[str, Any]:
+        args = dict(params.arguments or {})
+        unexpected = sorted(set(args) - allowed)
+        if unexpected:
+            # Never log argument values here; they may contain caller PII.
+            logger.warning(
+                "PRISM LINK tool={} ignored unexpected argument names={}",
