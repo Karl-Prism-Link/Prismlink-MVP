@@ -18,6 +18,14 @@ from database.repositories import (
 )
 from database.session import DBSession
 from database.utils import utcnow
+from monitoring import (
+    BOOKING_ATTEMPTS,
+    BOOKING_AVAILABILITY_CHECKS,
+    BOOKING_CREATED,
+    BOOKING_FAILURES,
+    BOOKING_IDEMPOTENT_REPLAYS,
+    booking_failure_reason,
+)
 from services.calendar.factory import build_calendar_provider
 from services.calendar.google import GoogleCalendarProviderError
 from services.service_names import canonical_service_name
@@ -118,44 +126,57 @@ class BookingService:
     async def availability(
         self, *, starts_at, service_id: UUID, staff_member_id: UUID | None = None
     ) -> tuple[bool, object]:
-        service = await self.services.get(service_id)
-        if service is None or not service.is_active:
-            raise HTTPException(status_code=404, detail="Service not found")
-        if staff_member_id is not None:
-            staff = await self.staff.get(staff_member_id)
-            if staff is None or not staff.is_active:
-                raise HTTPException(status_code=404, detail="Staff member not found")
-        ends_at = starts_at + timedelta(minutes=service.duration_minutes)
-        await self._validate_booking_window(starts_at, ends_at)
         try:
-            available = await self.calendar.is_available(
-                tenant_id=self.tenant_id,
-                starts_at=starts_at,
-                ends_at=ends_at,
-                staff_member_id=staff_member_id,
-            )
-        except GoogleCalendarProviderError as exc:
-            raise HTTPException(
-                status_code=503,
-                detail={"code": "CALENDAR_UNAVAILABLE", "message": str(exc)},
-            ) from exc
-        return available, ends_at
+            service = await self.services.get(service_id)
+            if service is None or not service.is_active:
+                raise HTTPException(status_code=404, detail="Service not found")
+            if staff_member_id is not None:
+                staff = await self.staff.get(staff_member_id)
+                if staff is None or not staff.is_active:
+                    raise HTTPException(status_code=404, detail="Staff member not found")
+            ends_at = starts_at + timedelta(minutes=service.duration_minutes)
+            await self._validate_booking_window(starts_at, ends_at)
+            try:
+                available = await self.calendar.is_available(
+                    tenant_id=self.tenant_id,
+                    starts_at=starts_at,
+                    ends_at=ends_at,
+                    staff_member_id=staff_member_id,
+                )
+            except GoogleCalendarProviderError as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "CALENDAR_UNAVAILABLE", "message": str(exc)},
+                ) from exc
+            BOOKING_AVAILABILITY_CHECKS.labels(
+                result="available" if available else "unavailable"
+            ).inc()
+            return available, ends_at
+        except Exception:
+            BOOKING_AVAILABILITY_CHECKS.labels(result="error").inc()
+            raise
 
     async def create(self, payload, *, call_id: UUID | None = None) -> Appointment:
-        if not payload.confirmed:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "code": "CONFIRMATION_REQUIRED",
-                    "message": "Caller confirmation is required.",
-                },
-            )
-        async with self._booking_guard():
-            return await self._create_locked(payload, call_id=call_id)
+        BOOKING_ATTEMPTS.inc()
+        try:
+            if not payload.confirmed:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "CONFIRMATION_REQUIRED",
+                        "message": "Caller confirmation is required.",
+                    },
+                )
+            async with self._booking_guard():
+                return await self._create_locked(payload, call_id=call_id)
+        except Exception as exc:
+            BOOKING_FAILURES.labels(reason=booking_failure_reason(exc)).inc()
+            raise
 
     async def _create_locked(self, payload, *, call_id: UUID | None = None) -> Appointment:
         prior = await self.appointments.by_idempotency_key(payload.idempotency_key)
         if prior is not None:
+            BOOKING_IDEMPOTENT_REPLAYS.inc()
             return prior
         service = await self.services.get(payload.service_id)
         if service is None or not service.is_active:
@@ -174,10 +195,14 @@ class BookingService:
                 staff_member_id=payload.staff_member_id,
             )
         except GoogleCalendarProviderError as exc:
+            BOOKING_AVAILABILITY_CHECKS.labels(result="error").inc()
             raise HTTPException(
                 status_code=503,
                 detail={"code": "CALENDAR_UNAVAILABLE", "message": str(exc)},
             ) from exc
+        BOOKING_AVAILABILITY_CHECKS.labels(
+            result="available" if is_available else "unavailable"
+        ).inc()
         if not is_available:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -233,6 +258,7 @@ class BookingService:
             )
             await self.db.commit()
             await self.db.refresh(appointment)
+            BOOKING_CREATED.inc()
             return appointment
         except Exception:
             await self.db.rollback()

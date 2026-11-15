@@ -31,6 +31,21 @@ VOICE_TURN_LATENCY = Histogram(
     "Caller end-of-turn to first Pipecat response audio",
     buckets=(0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 6, 10),
 )
+# Booking metrics deliberately use a small, fixed label set. Never attach tenant IDs,
+# caller numbers, customer names, appointment IDs, or arbitrary exception text.
+BOOKING_ATTEMPTS = Counter("booking_attempts", "Confirmed appointment creation attempts")
+BOOKING_CREATED = Counter("booking_created", "New appointments successfully persisted")
+BOOKING_IDEMPOTENT_REPLAYS = Counter(
+    "booking_idempotent_replays", "Booking requests safely returned an existing appointment"
+)
+BOOKING_FAILURES = Counter(
+    "booking_failures", "Appointment creation failures by bounded reason", ["reason"]
+)
+BOOKING_AVAILABILITY_CHECKS = Counter(
+    "booking_availability_checks",
+    "Availability checks by result",
+    ["result"],
+)
 HTTP_REQUESTS = Counter(
     "http_requests",
     "HTTP requests by method, route template and status",
@@ -42,6 +57,31 @@ HTTP_REQUEST_LATENCY = Histogram(
     ["method", "route"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
 )
+
+
+def booking_failure_reason(exc):
+    """Map errors to bounded metric labels; never expose arbitrary exception strings."""
+    if isinstance(exc, HTTPException):
+        detail = exc.detail
+        code = detail.get("code") if isinstance(detail, dict) else None
+        known = {
+            "CONFIRMATION_REQUIRED": "confirmation_required",
+            "APPOINTMENT_CONFLICT": "appointment_conflict",
+            "CALENDAR_UNAVAILABLE": "calendar_unavailable",
+            "OUTSIDE_BUSINESS_HOURS": "outside_business_hours",
+            "APPOINTMENT_IN_PAST": "appointment_in_past",
+            "DATETIME_TIMEZONE_REQUIRED": "timezone_required",
+            "INVALID_SALON_TIMEZONE": "invalid_salon_timezone",
+        }
+        if code in known:
+            return known[code]
+        if exc.status_code == 404:
+            return "not_found"
+        if exc.status_code == 422:
+            return "validation_error"
+        if exc.status_code == 409:
+            return "conflict"
+    return "internal_error"
 
 
 def record_call_started():
