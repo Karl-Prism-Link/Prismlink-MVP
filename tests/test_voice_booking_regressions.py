@@ -202,7 +202,7 @@ async def test_booking_tool_failure_never_reports_success_or_creates_appointment
         )
 
         assert result["ok"] is False
-        assert result["booked"] is not True
+        assert result.get("booked") is not True
         assert result["code"] == "HTTP_503"
         assert "Calendar service unavailable" in result["message"]
         assert await AppointmentRepository(db, live.tenant_id).list() == []
