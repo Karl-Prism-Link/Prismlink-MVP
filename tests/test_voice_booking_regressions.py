@@ -95,8 +95,8 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
     try:
         tuesday = next_weekday_iso(1)
         thursday = next_weekday_iso(3)
-        tuesday_phrase = datetime.fromisoformat(tuesday).strftime("%A %d %B %Y at 2 pm")
-        thursday_phrase = datetime.fromisoformat(thursday).strftime("%A %d %B %Y at 2 pm")
+        tuesday_phrase = "next Tuesday at 2 pm"
+        thursday_phrase = "next Thursday at 2 pm"
 
         first = await tools.book_appointment(
             "Haircut", tuesday, "Jane Doe", "0213333333", False,
@@ -123,7 +123,7 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
         # The caller has not yet confirmed the new Thursday readback.
         premature = await tools.book_appointment(
             "Haircut", thursday, "Jane Doe", "0213333333", True,
-            caller_time_phrase="Thursday at 2 pm",
+            caller_time_phrase=thursday_phrase,
         )
         assert premature["ok"] is False
         assert premature["booked"] is False
@@ -158,7 +158,7 @@ async def test_booking_tool_failure_never_reports_success_or_creates_appointment
         starts_at = next_weekday_iso(1)
         prepared = await tools.book_appointment(
             "Haircut", starts_at, "Jane Doe", "0213333333", False,
-            caller_time_phrase=datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm"),
+            caller_time_phrase="next Tuesday at 2 pm",
         )
         assert prepared["ok"] is True
         assert prepared["booked"] is False
