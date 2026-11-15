@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-
 _HEALTH_SIGNAL = re.compile(
     r"\b(?:cut\s+(?:my\s+)?(?:finger|hand|self)|injur(?:y|ed)|"
     r"bleed(?:ing)?|burn(?:ed|t)?\s+(?:myself|my\s+hand|my\s+skin)|"

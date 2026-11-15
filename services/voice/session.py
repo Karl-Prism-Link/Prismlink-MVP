@@ -305,7 +305,10 @@ class LiveCallSession:
             return self.management_phone_digits
         if len(clean) >= 9:
             self._management_phone_digits = clean[:12]
-        elif len(self._management_phone_digits) < 9 and len(self._management_phone_digits) + len(clean) <= 12:
+        elif (
+            len(self._management_phone_digits) < 9
+            and len(self._management_phone_digits) + len(clean) <= 12
+        ):
             self._management_phone_digits += clean
         return self.management_phone_digits
 

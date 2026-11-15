@@ -6,7 +6,8 @@ def test_latency_observer_is_registered_on_pipeline_worker():
     source = Path(__file__).resolve().parents[1] / "apps" / "voice" / "bot.py"
     module = ast.parse(source.read_text())
     calls = [
-        node for node in ast.walk(module)
+        node
+        for node in ast.walk(module)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id == "PipelineWorker"

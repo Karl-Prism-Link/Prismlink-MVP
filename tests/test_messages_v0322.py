@@ -174,16 +174,12 @@ def test_call_transcript_endpoint_is_available_for_all_calls_and_tenant_scoped(c
     assert simulated.status_code == 200, simulated.text
     call_id = simulated.json()["call"]["id"]
 
-    transcript = client.get(
-        f"/api/v1/calls/{call_id}/transcript", headers=auth(token)
-    )
+    transcript = client.get(f"/api/v1/calls/{call_id}/transcript", headers=auth(token))
     assert transcript.status_code == 200, transcript.text
     rows = transcript.json()
     assert [row["speaker"] for row in rows] == ["caller", "assistant"]
     assert [row["sequence_number"] for row in rows] == [1, 2]
     assert rows[0]["text"] == "Can I book an appointment?"
 
-    hidden = client.get(
-        f"/api/v1/calls/{call_id}/transcript", headers=auth(other)
-    )
+    hidden = client.get(f"/api/v1/calls/{call_id}/transcript", headers=auth(other))
     assert hidden.status_code == 404

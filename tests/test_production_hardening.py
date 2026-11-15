@@ -121,7 +121,8 @@ async def test_auth_limit_keys_on_account_as_well_as_address(monkeypatch) -> Non
     first = Request({"type": "http", "headers": [], "client": ("198.51.100.10", 1234)})
     second = Request({"type": "http", "headers": [], "client": ("203.0.113.20", 1234)})
 
-    await rate_limit.limit_login_account(first, "Owner@Salon.test")
+    for _ in range(5):
+        await rate_limit.limit_login_account(first, "Owner@Salon.test")
     with pytest.raises(HTTPException) as exc_info:
         await rate_limit.limit_login_account(second, "owner@salon.test")
 
