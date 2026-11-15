@@ -195,10 +195,14 @@ class BookingService:
                 staff_member_id=payload.staff_member_id,
             )
         except GoogleCalendarProviderError as exc:
+            BOOKING_AVAILABILITY_CHECKS.labels(result="error").inc()
             raise HTTPException(
                 status_code=503,
                 detail={"code": "CALENDAR_UNAVAILABLE", "message": str(exc)},
             ) from exc
+        BOOKING_AVAILABILITY_CHECKS.labels(
+            result="available" if is_available else "unavailable"
+        ).inc()
         if not is_available:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
