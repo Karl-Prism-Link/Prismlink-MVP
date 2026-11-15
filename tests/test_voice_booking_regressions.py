@@ -95,10 +95,12 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
     try:
         tuesday = next_weekday_iso(1)
         thursday = next_weekday_iso(3)
+        tuesday_phrase = datetime.fromisoformat(tuesday).strftime("%A %d %B %Y at 2 pm")
+        thursday_phrase = datetime.fromisoformat(thursday).strftime("%A %d %B %Y at 2 pm")
 
         first = await tools.book_appointment(
             "Haircut", tuesday, "Jane Doe", "0213333333", False,
-            caller_time_phrase="Tuesday at 2 pm",
+            caller_time_phrase=tuesday_phrase,
         )
         assert first["ok"] is True
         assert first["ready_to_confirm"] is True
@@ -107,11 +109,11 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
         # A yes to the first readback must not authorize the caller's changed request.
         await live.append_transcript("assistant", f"{first['spoken_start']}. Is that correct?")
         await live.append_transcript("caller", "Yes.")
-        await live.append_transcript("caller", "Actually, Thursday at 2 pm.")
+        await live.append_transcript("caller", f"Actually, {thursday_phrase}.")
 
         changed = await tools.book_appointment(
             "Haircut", thursday, "Jane Doe", "0213333333", False,
-            caller_time_phrase="Thursday at 2 pm",
+            caller_time_phrase=thursday_phrase,
         )
         assert changed["ok"] is True
         assert changed["ready_to_confirm"] is True
@@ -156,7 +158,7 @@ async def test_booking_tool_failure_never_reports_success_or_creates_appointment
         starts_at = next_weekday_iso(1)
         prepared = await tools.book_appointment(
             "Haircut", starts_at, "Jane Doe", "0213333333", False,
-            caller_time_phrase="Tuesday at 2 pm",
+            caller_time_phrase=datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm"),
         )
         assert prepared["ok"] is True
         assert prepared["booked"] is False
@@ -172,7 +174,7 @@ async def test_booking_tool_failure_never_reports_success_or_creates_appointment
         monkeypatch.setattr(tools.booking, "create", fail_create)
         result = await tools.book_appointment(
             "Haircut", starts_at, "Jane Doe", "0213333333", True,
-            caller_time_phrase="Tuesday at 2 pm",
+            caller_time_phrase=datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm"),
         )
 
         assert result["ok"] is False
@@ -191,7 +193,7 @@ async def test_booking_confirmation_without_fresh_explicit_yes_is_rejected(clien
         starts_at = next_weekday_iso(1)
         prepared = await tools.book_appointment(
             "Haircut", starts_at, "Jane Doe", "0213333333", False,
-            caller_time_phrase="Tuesday at 2 pm",
+            caller_time_phrase=datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm"),
         )
         assert prepared["ready_to_confirm"] is True
 
@@ -201,7 +203,7 @@ async def test_booking_confirmation_without_fresh_explicit_yes_is_rejected(clien
         await live.append_transcript("caller", "What time was that again?")
         result = await tools.book_appointment(
             "Haircut", starts_at, "Jane Doe", "0213333333", True,
-            caller_time_phrase="Tuesday at 2 pm",
+            caller_time_phrase=datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm"),
         )
 
         assert result["ok"] is False
