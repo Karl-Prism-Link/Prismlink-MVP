@@ -56,7 +56,6 @@ from services.voice.contact import (
     recent_booking_datetime_phrase,
     speak_phone_digits,
 )
-from services.voice.safety import is_health_only_request, is_immediate_emergency_language
 from services.voice.message_routing import (
     callback_message_from_speech,
     extract_inline_message,
@@ -71,17 +70,18 @@ from services.voice.message_routing import (
 )
 from services.voice.model_router import (
     ModelTier,
-    flatten_tool_result_messages,
     confirmation_fastpath_action,
+    flatten_tool_result_messages,
     route_voice_turn,
 )
 from services.voice.runtime_control import (
+    RollingModelTokenBudget,
     compact_context_messages,
     is_generic_booking_request,
     is_rate_limit_error,
-    RollingModelTokenBudget,
     select_latest_caller_text,
 )
+from services.voice.safety import is_health_only_request, is_immediate_emergency_language
 from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     is_business_hours_question,
@@ -1930,9 +1930,11 @@ async def run_bot(
                     r"[^a-z0-9]+", " ", str(prepared_message.get("message") or "").casefold()
                 ).strip()
                 expected_phone = re.sub(
-                    r"[^a-z0-9]+", " ", speak_phone_digits(
+                    r"[^a-z0-9]+",
+                    " ",
+                    speak_phone_digits(
                         str(prepared_message.get("customer_phone") or "")
-                    ).casefold()
+                    ).casefold(),
                 ).strip()
                 expected_target = re.sub(
                     r"[^a-z0-9]+", " ", str(prepared_message.get("target_staff") or "").casefold()
