@@ -192,9 +192,7 @@ def setup_metrics(app):
         token = settings.metrics_token
         if token:
             supplied = request.headers.get("authorization", "")
-            if not hmac.compare_digest(
-                supplied.encode("utf-8"), f"Bearer {token}".encode("utf-8")
-            ):
+            if not hmac.compare_digest(supplied.encode("utf-8"), f"Bearer {token}".encode()):
                 raise HTTPException(status_code=401, detail="Invalid metrics credentials")
         elif settings.app_env == "production":
             # Fail closed: never expose process metrics unauthenticated in production.

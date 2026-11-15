@@ -111,12 +111,15 @@ async def voice_uat_health(
             "rtp_send_errors": int(rtp_send_errors),
             "rtp_no_flow_legs": int(rtp_no_flow),
             "callback_errors": int(metrics.get("aurora_callback_requests_total", 0.0))
-            if aurora_reachable else None,
+            if aurora_reachable
+            else None,
         },
         "pipecat": {
             "module_available": pipecat_available,
             "launch_mode": "on-demand per incoming call",
-            "ready_for_calls": bool(pipecat_available and voice_configured and aurora_up and sip_registered),
+            "ready_for_calls": bool(
+                pipecat_available and voice_configured and aurora_up and sip_registered
+            ),
         },
         "voice_configuration": {
             "ready": voice_configured,

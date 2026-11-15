@@ -4,6 +4,7 @@
 Usage: run from the Prism Link project root using its virtual environment.
 This script does not modify the live SQLite database or application settings.
 """
+
 import getpass
 import os
 import sqlite3
@@ -12,13 +13,22 @@ import uuid
 from datetime import datetime, time
 from urllib.parse import quote
 
-from sqlalchemy import MetaData, create_engine, inspect, select, func
+from sqlalchemy import MetaData, create_engine, func, select
 
 SOURCE = "prism_link.db"
 TABLE_ORDER = [
-    "tenants", "users", "services", "business_hours", "staff_members",
-    "calendar_connections", "calls", "appointments", "audit_logs",
-    "call_summaries", "salon_messages", "transcript_messages",
+    "tenants",
+    "users",
+    "services",
+    "business_hours",
+    "staff_members",
+    "calendar_connections",
+    "calls",
+    "appointments",
+    "audit_logs",
+    "call_summaries",
+    "salon_messages",
+    "transcript_messages",
 ]
 
 
@@ -72,7 +82,9 @@ def main():
                         record = dict(row)
                         if set(record) != column_names:
                             raise RuntimeError(f"Column mismatch in {name}")
-                        batch.append({col.name: convert(record[col.name], col.type) for col in table.columns})
+                        batch.append(
+                            {col.name: convert(record[col.name], col.type) for col in table.columns}
+                        )
                         if len(batch) == 250:
                             connection.execute(table.insert(), batch)
                             inserted += len(batch)
@@ -80,9 +92,13 @@ def main():
                     if batch:
                         connection.execute(table.insert(), batch)
                         inserted += len(batch)
-                    target_count = connection.execute(select(func.count()).select_from(table)).scalar_one()
+                    target_count = connection.execute(
+                        select(func.count()).select_from(table)
+                    ).scalar_one()
                     if target_count != inserted:
-                        raise RuntimeError(f"Count mismatch in {name}: {inserted} vs {target_count}")
+                        raise RuntimeError(
+                            f"Count mismatch in {name}: {inserted} vs {target_count}"
+                        )
                     print(f"OK {name}: {inserted}")
                     total += inserted
                 # PostgreSQL checks foreign keys as rows are inserted.

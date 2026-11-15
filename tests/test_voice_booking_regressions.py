@@ -36,9 +36,7 @@ def next_weekday_iso(weekday: int, hour: int = 14) -> str:
     days = (weekday - now.weekday()) % 7
     if days == 0:
         days = 7
-    target = (now + timedelta(days=days)).replace(
-        hour=hour, minute=0, second=0, microsecond=0
-    )
+    target = (now + timedelta(days=days)).replace(hour=hour, minute=0, second=0, microsecond=0)
     return target.isoformat()
 
 
@@ -99,7 +97,11 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
         thursday_phrase = "next Thursday at 2 pm"
 
         first = await tools.book_appointment(
-            "Haircut", tuesday, "Jane Doe", "0213333333", False,
+            "Haircut",
+            tuesday,
+            "Jane Doe",
+            "0213333333",
+            False,
             caller_time_phrase=tuesday_phrase,
         )
         assert first["ok"] is True
@@ -112,7 +114,11 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
         await live.append_transcript("caller", f"Actually, {thursday_phrase}.")
 
         changed = await tools.book_appointment(
-            "Haircut", thursday, "Jane Doe", "0213333333", False,
+            "Haircut",
+            thursday,
+            "Jane Doe",
+            "0213333333",
+            False,
             caller_time_phrase=thursday_phrase,
         )
         assert changed["ok"] is True
@@ -122,7 +128,11 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
 
         # The caller has not yet confirmed the new Thursday readback.
         premature = await tools.book_appointment(
-            "Haircut", thursday, "Jane Doe", "0213333333", True,
+            "Haircut",
+            thursday,
+            "Jane Doe",
+            "0213333333",
+            True,
             caller_time_phrase=thursday_phrase,
         )
         assert premature["ok"] is False
@@ -131,11 +141,16 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
         assert await AppointmentRepository(db, live.tenant_id).list() == []
 
         await live.append_transcript(
-            "assistant", f"{changed['spoken_start']}, Jane Doe, {changed['spoken_phone']}. Is that correct?"
+            "assistant",
+            f"{changed['spoken_start']}, Jane Doe, {changed['spoken_phone']}. Is that correct?",
         )
         await live.append_transcript("caller", "Yes, that's correct.")
         created = await tools.book_appointment(
-            "Haircut", thursday, "Jane Doe", "0213333333", True,
+            "Haircut",
+            thursday,
+            "Jane Doe",
+            "0213333333",
+            True,
             caller_time_phrase="Thursday at 2 pm",
         )
         assert created["ok"] is True
@@ -144,27 +159,32 @@ async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes
 
         appointments = await AppointmentRepository(db, live.tenant_id).list()
         assert len(appointments) == 1
-        assert appointments[0].starts_at.astimezone(
-            ZoneInfo("Pacific/Auckland")
-        ).weekday() == 3
+        assert appointments[0].starts_at.astimezone(ZoneInfo("Pacific/Auckland")).weekday() == 3
     finally:
         await db.close()
 
 
 @pytest.mark.asyncio
-async def test_booking_tool_failure_never_reports_success_or_creates_appointment(client, monkeypatch):
+async def test_booking_tool_failure_never_reports_success_or_creates_appointment(
+    client, monkeypatch
+):
     db, live, tools = await booking_context(client, slug="booking-tool-failure")
     try:
         starts_at = next_weekday_iso(1)
         prepared = await tools.book_appointment(
-            "Haircut", starts_at, "Jane Doe", "0213333333", False,
+            "Haircut",
+            starts_at,
+            "Jane Doe",
+            "0213333333",
+            False,
             caller_time_phrase="next Tuesday at 2 pm",
         )
         assert prepared["ok"] is True
         assert prepared["booked"] is False
 
         await live.append_transcript(
-            "assistant", f"{prepared['spoken_start']}, Jane Doe, {prepared['spoken_phone']}. Is that correct?"
+            "assistant",
+            f"{prepared['spoken_start']}, Jane Doe, {prepared['spoken_phone']}. Is that correct?",
         )
         await live.append_transcript("caller", "Yes, that's correct.")
 
@@ -173,7 +193,11 @@ async def test_booking_tool_failure_never_reports_success_or_creates_appointment
 
         monkeypatch.setattr(tools.booking, "create", fail_create)
         result = await tools.book_appointment(
-            "Haircut", starts_at, "Jane Doe", "0213333333", True,
+            "Haircut",
+            starts_at,
+            "Jane Doe",
+            "0213333333",
+            True,
             caller_time_phrase=datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm"),
         )
 
@@ -192,17 +216,26 @@ async def test_booking_confirmation_without_fresh_explicit_yes_is_rejected(clien
     try:
         starts_at = next_weekday_iso(1)
         prepared = await tools.book_appointment(
-            "Haircut", starts_at, "Jane Doe", "0213333333", False,
+            "Haircut",
+            starts_at,
+            "Jane Doe",
+            "0213333333",
+            False,
             caller_time_phrase=datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm"),
         )
         assert prepared["ready_to_confirm"] is True
 
         await live.append_transcript(
-            "assistant", f"{prepared['spoken_start']}, Jane Doe, {prepared['spoken_phone']}. Is that correct?"
+            "assistant",
+            f"{prepared['spoken_start']}, Jane Doe, {prepared['spoken_phone']}. Is that correct?",
         )
         await live.append_transcript("caller", "What time was that again?")
         result = await tools.book_appointment(
-            "Haircut", starts_at, "Jane Doe", "0213333333", True,
+            "Haircut",
+            starts_at,
+            "Jane Doe",
+            "0213333333",
+            True,
             caller_time_phrase=datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm"),
         )
 

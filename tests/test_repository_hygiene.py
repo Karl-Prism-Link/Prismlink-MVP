@@ -25,7 +25,10 @@ def tracked_files() -> list[str]:
             text=True,
             check=True,
         )
-    except (OSError, subprocess.CalledProcessError) as exc:  # pragma: no cover - environment specific
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+    ) as exc:  # pragma: no cover - environment specific
         pytest.skip(f"git metadata is unavailable: {exc}")
     return [path for path in result.stdout.split("\0") if path]
 

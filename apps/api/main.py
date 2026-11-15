@@ -71,5 +71,9 @@ app.include_router(aurora.router)
 async def user_dashboard() -> FileResponse:
     return FileResponse(
         Path(__file__).resolve().parents[1] / "dashboard" / "prism-link-live-dashboard.html",
-        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache", "Expires": "0"},
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
     )

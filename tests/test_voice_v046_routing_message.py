@@ -12,8 +12,11 @@ from services.voice.message_routing import (
 )
 from services.voice.model_router import confirmation_fastpath_action
 from services.voice.safety import is_health_only_request, is_immediate_emergency_language
-from services.voice.speech_cleanup import deterministic_post_action_social_reply, is_farewell_utterance
 from services.voice.session import LiveCallSession
+from services.voice.speech_cleanup import (
+    deterministic_post_action_social_reply,
+    is_farewell_utterance,
+)
 from services.voice.tools import VoiceToolset
 
 

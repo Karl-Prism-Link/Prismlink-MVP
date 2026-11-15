@@ -35,11 +35,13 @@ def test_tool_readback_flattens_tool_control_flow_before_no_tool_completion():
         {"role": "user", "content": "Check Wednesday at nine."},
         {
             "role": "assistant",
-            "tool_calls": [{
-                "id": "call_1",
-                "type": "function",
-                "function": {"name": "check_availability", "arguments": "{}"},
-            }],
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "check_availability", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "name": "check_availability", "content": "Wednesday 9 AM is available."},
     ]

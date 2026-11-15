@@ -15,10 +15,14 @@ STATE_MARKER = "PRISM_LINK_STATE:"
 def parse_retry_delay_seconds(error_text: str, *, default: float = 1.0) -> float:
     """Extract Groq retry timing, preserving provider waits up to 30 seconds."""
     text = error_text or ""
-    milliseconds = re.search(r"(?:retry-after-ms|try again in)\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)ms", text, re.I)
+    milliseconds = re.search(
+        r"(?:retry-after-ms|try again in)\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)ms", text, re.I
+    )
     if milliseconds:
         return min(30.0, max(0.25, float(milliseconds.group(1)) / 1000.0))
-    seconds = re.search(r"(?:retry-after|try again in)\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)s?", text, re.I)
+    seconds = re.search(
+        r"(?:retry-after|try again in)\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)s?", text, re.I
+    )
     if seconds:
         return min(30.0, max(0.25, float(seconds.group(1))))
     return min(30.0, max(0.25, default))
