@@ -828,6 +828,8 @@ async def test_voice_bare_oclock_infers_unique_meridiem_from_business_hours(clie
 
 async def test_voice_numeric_02_00_transcript_is_resolved_by_business_hours(client, monkeypatch):
     """ASR may emit '02:00' for spoken 'two o'clock'; do not force 2 AM."""
+    from zoneinfo import ZoneInfo
+
     from database.repositories import TenantRepository
     from database.session import DBSession
     from services.voice.session import LiveCallSession
@@ -861,7 +863,13 @@ async def test_voice_numeric_02_00_transcript_is_resolved_by_business_hours(clie
             called_number=tenant.phone_number,
         )
         await live.start()
-        await live.append_transcript("caller", "Can I book a men's cut for Monday, 02:00?")
+        tz = ZoneInfo("Pacific/Auckland")
+        now_local = datetime.now(tz)
+        days_until_next_monday = (7 - now_local.weekday()) % 7 or 7
+        next_monday_2am = (now_local + timedelta(days=days_until_next_monday)).replace(
+            hour=2, minute=0, second=0, microsecond=0
+        )
+        await live.append_transcript("caller", "Can I book a men's cut for next Monday, 02:00?")
         tools = VoiceToolset(db, tenant, live)
 
         async def free_calendar(*, starts_at, service_id, staff_member_id=None):
@@ -870,8 +878,8 @@ async def test_voice_numeric_02_00_transcript_is_resolved_by_business_hours(clie
         monkeypatch.setattr(tools.booking, "availability", free_calendar)
         result = await tools.check_availability(
             "Men's Cut",
-            "2026-08-17T02:00",
-            caller_time_phrase="Monday, 02:00",
+            next_monday_2am.isoformat(),
+            caller_time_phrase="next Monday, 02:00",
         )
         assert result["ok"] is True
         assert result["weekday"] == "Monday"
