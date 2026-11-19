@@ -30,7 +30,7 @@ Requires Python 3.12+. Before starting the API, copy `.env.example` to `.env` an
 
 ```powershell
 python -m venv .venv
-.\\.venv\\Scripts\\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 Copy-Item .env.example .env
 python -m uvicorn apps.api.main:app --reload
