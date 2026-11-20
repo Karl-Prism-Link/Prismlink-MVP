@@ -27,6 +27,8 @@ def test_additional_nz_stt_service_confusions_map_only_to_configured_mens_cut():
     configured = ("Women's Cut", "Men's Cut", "Blow Wave", "Colour")
     assert configured_service_name_from_speech("mean tea cup", configured) == "Men's Cut"
     assert configured_service_name_from_speech("means he can't", configured) == "Men's Cut"
+    assert configured_service_name_from_speech("Men's haircut", configured) == "Men's Cut"
+    assert configured_service_name_from_speech("me and tea cut", configured) == "Men's Cut"
 
 
 def test_multi_question_segment_is_trimmed_after_first_question():

@@ -525,20 +525,37 @@ class VoiceToolset:
 
         am_hour = hour_12 % 12
         pm_hour = am_hour + 12
-        candidates: list[datetime] = []
-        for candidate_hour in (am_hour, pm_hour):
-            local = datetime(
-                target_date.year,
-                target_date.month,
-                target_date.day,
-                candidate_hour,
-                minute,
-                tzinfo=self.tz,
-            )
-            starts = local.astimezone(UTC)
-            ends = starts + timedelta(minutes=duration_minutes)
-            if starts > datetime.now(UTC) and await self._inside_configured_hours(starts, ends):
-                candidates.append(starts)
+
+        async def valid_meridiem_candidates(day):
+            valid: list[datetime] = []
+            for candidate_hour in (am_hour, pm_hour):
+                local = datetime(
+                    day.year,
+                    day.month,
+                    day.day,
+                    candidate_hour,
+                    minute,
+                    tzinfo=self.tz,
+                )
+                starts = local.astimezone(UTC)
+                ends = starts + timedelta(minutes=duration_minutes)
+                if starts > datetime.now(UTC) and await self._inside_configured_hours(starts, ends):
+                    valid.append(starts)
+            return valid
+
+        candidates = await valid_meridiem_candidates(target_date)
+        # If the caller says only a weekday and a bare 12-hour time on that same
+        # weekday after the viable opening-hours interpretation has passed, treat
+        # it as the next occurrence of that weekday. Do not mistake a future but
+        # out-of-hours PM interpretation for a valid same-day appointment.
+        if (
+            not candidates
+            and target_date == datetime.now(self.tz).date()
+            and re.search(r"\b(?:monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat|sunday|sun)\b", caller_time_phrase or "", re.I)
+        ):
+            candidates = await valid_meridiem_candidates(target_date + timedelta(days=7))
+            if len(candidates) == 1:
+                target_date += timedelta(days=7)
 
         if len(candidates) == 1:
             return candidates[0], None, "caller_phrase_business_hours_inferred"
@@ -1053,6 +1070,68 @@ class VoiceToolset:
                 "is closed. If outside_business_hours, explain the configured opening hours."
             ),
         }
+
+    async def find_available_times(
+        self, service_name: str, day_phrase: str, staff_name: str | None = None
+    ) -> dict:
+        """Return up to three calendar-confirmed appointment starts on a caller-stated day."""
+        service, service_choices = await self._resolve_service(service_name)
+        if service is None:
+            return {"ok": False, "code": "SERVICE_NOT_RESOLVED", "choices": service_choices}
+        staff, staff_choices = await self._resolve_staff(staff_name)
+        if staff_choices is not None:
+            return {"ok": False, "code": "STAFF_NOT_RESOLVED", "choices": staff_choices}
+
+        phrase = str(day_phrase or "").strip().casefold()
+        now_local = datetime.now(self.tz)
+        if phrase == "today":
+            target_date = now_local.date()
+        elif phrase == "tomorrow":
+            target_date = now_local.date() + timedelta(days=1)
+        else:
+            weekdays = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
+            match = re.search(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", phrase)
+            if not match:
+                return {"ok": False, "code": "DATE_NOT_RESOLVED"}
+            weekday = weekdays[match.group(1)]
+            days_ahead = (weekday - now_local.weekday()) % 7
+            if days_ahead == 0 and re.search(r"\bnext\b", phrase):
+                days_ahead = 7
+            # If the original request included a time that has already passed today,
+            # retain the next occurrence of that weekday when listing alternatives.
+            stated_time = re.search(r"\b(\d{1,2})(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)?\b", phrase)
+            if days_ahead == 0 and stated_time:
+                hour = int(stated_time.group(1))
+                minute = int(stated_time.group(2) or 0)
+                meridiem = (stated_time.group(3) or "").replace(".", "")
+                if meridiem:
+                    hour = hour % 12 + (12 if meridiem.startswith("p") else 0)
+                if (hour, minute) <= (now_local.hour, now_local.minute):
+                    days_ahead = 7
+            target_date = now_local.date() + timedelta(days=days_ahead)
+
+        hours_rows = await self.hours.list()
+        hours = next((row for row in hours_rows if row.day_of_week == target_date.weekday()), None)
+        if hours_rows and (hours is None or hours.is_closed or hours.opens_at is None or hours.closes_at is None):
+            return {"ok": True, "service": canonical_service_name(service.name), "day": target_date.strftime("%A"), "local_date": target_date.isoformat(), "slots": []}
+
+        opening = hours.opens_at if hours else datetime.strptime("09:00", "%H:%M").time()
+        closing = hours.closes_at if hours else datetime.strptime("17:00", "%H:%M").time()
+        cursor = datetime.combine(target_date, opening, tzinfo=self.tz)
+        close_at = datetime.combine(target_date, closing, tzinfo=self.tz)
+        slots: list[dict[str, str]] = []
+        while cursor + timedelta(minutes=service.duration_minutes) <= close_at and len(slots) < 3:
+            starts = cursor.astimezone(UTC)
+            if starts > datetime.now(UTC):
+                try:
+                    available, _ = await self.booking.availability(starts_at=starts, service_id=service.id, staff_member_id=staff.id if staff else None)
+                except HTTPException as exc:
+                    return self._error_payload(exc)
+                if available:
+                    display = self._display_local_datetime(starts)
+                    slots.append({"starts_at": self._local_iso(starts), "spoken_start": display["spoken_start"]})
+            cursor += timedelta(minutes=30)
+        return {"ok": True, "service": canonical_service_name(service.name), "day": target_date.strftime("%A"), "local_date": target_date.isoformat(), "slots": slots}
 
     async def book_appointment(
         self,
