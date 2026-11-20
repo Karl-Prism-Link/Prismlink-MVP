@@ -35,6 +35,30 @@ from services.voice.aurora_rtp import (
 log = logging.getLogger(__name__)
 
 
+async def _recvfrom(loop: asyncio.AbstractEventLoop, sock: socket.socket, size: int):
+    """Receive one UDP datagram using the loop's file-descriptor readiness API."""
+    future = loop.create_future()
+
+    def readable() -> None:
+        if future.done():
+            return
+        try:
+            datagram = sock.recvfrom(size)
+        except BlockingIOError:
+            return
+        except Exception as exc:
+            future.set_exception(exc)
+        else:
+            future.set_result(datagram)
+
+    fd = sock.fileno()
+    loop.add_reader(fd, readable)
+    try:
+        return await future
+    finally:
+        loop.remove_reader(fd)
+
+
 class _Input(BaseInputTransport):
     def __init__(self, owner: AuroraRtpTransport, params: TransportParams):
         super().__init__(params)
@@ -61,7 +85,7 @@ class _Input(BaseInputTransport):
             while not transport.closed.is_set():
                 try:
                     packet, sender = await asyncio.wait_for(
-                        loop.sock_recvfrom(transport.sock, 2048), timeout=0.5
+                        _recvfrom(loop, transport.sock, 2048), timeout=0.5
                     )
                 except TimeoutError:
                     continue
@@ -152,10 +176,12 @@ class _Output(BaseOutputTransport):
                     marker=self.first_packet,
                 )
                 await asyncio.sleep(max(0.0, self.next_send - loop.time()))
-                await asyncio.wait_for(
-                    loop.sock_sendto(transport.sock, packet, transport.aurora_destination),
-                    timeout=transport.send_timeout,
-                )
+                # RTP packets are small UDP datagrams; sendto() is safe on this
+                # non-blocking socket and works with uvloop, whose sock_sendto()
+                # coroutine API is not implemented.
+                sent = transport.sock.sendto(packet, transport.aurora_destination)
+                if sent != len(packet):
+                    raise OSError(f"short UDP send: {sent}/{len(packet)} bytes")
                 self.first_packet = False
                 self.sequence = (self.sequence + 1) & 0xFFFF
                 self.timestamp = (self.timestamp + 160) & 0xFFFFFFFF

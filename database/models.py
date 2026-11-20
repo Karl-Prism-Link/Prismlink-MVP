@@ -23,6 +23,14 @@ class Tenant(Base):
     slug: Mapped[str] = mapped_column(String(160), unique=True, index=True)
     timezone: Mapped[str] = mapped_column(String(64), default="Pacific/Auckland")
     phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), default="NZD")
+    prices_include_gst: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_disclosure: Mapped[str | None] = mapped_column(Text, nullable=True)
+    walk_ins_policy: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parking_info: Mapped[str | None] = mapped_column(Text, nullable=True)
+    accessibility_info: Mapped[str | None] = mapped_column(Text, nullable=True)
     greeting: Mapped[str] = mapped_column(
         Text, default="Thanks for calling. How can I help you today?"
     )

@@ -35,6 +35,14 @@ class TenantOut(APIModel):
     slug: str
     timezone: str
     phone_number: str | None
+    address: str | None
+    contact_email: EmailStr | None
+    currency: str
+    prices_include_gst: bool
+    ai_disclosure: str | None
+    walk_ins_policy: str | None
+    parking_info: str | None
+    accessibility_info: str | None
     greeting: str
     status: str
     trial_ends_at: datetime
@@ -44,6 +52,14 @@ class TenantPatch(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
     timezone: str | None = Field(default=None, max_length=64)
     phone_number: str | None = Field(default=None, max_length=32)
+    address: str | None = Field(default=None, max_length=300)
+    contact_email: EmailStr | None = None
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    prices_include_gst: bool | None = None
+    ai_disclosure: str | None = Field(default=None, max_length=500)
+    walk_ins_policy: str | None = Field(default=None, max_length=1000)
+    parking_info: str | None = Field(default=None, max_length=1000)
+    accessibility_info: str | None = Field(default=None, max_length=1000)
     greeting: str | None = Field(default=None, min_length=2, max_length=1000)
 
 
