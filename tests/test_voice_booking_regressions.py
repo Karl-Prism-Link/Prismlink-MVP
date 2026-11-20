@@ -245,3 +245,73 @@ async def test_booking_confirmation_without_fresh_explicit_yes_is_rejected(clien
         assert await AppointmentRepository(db, live.tenant_id).list() == []
     finally:
         await db.close()
+
+@pytest.mark.asyncio
+async def test_same_day_weekday_bare_time_rolls_to_next_week_when_opening_time_has_passed(
+    client, monkeypatch
+):
+    from datetime import datetime as RealDateTime
+
+    db, live, tools = await booking_context(client, slug="booking-same-day-past-bare-time")
+    try:
+        class FrozenDateTime(RealDateTime):
+            @classmethod
+            def now(cls, tz=None):
+                fixed = RealDateTime(
+                    2026, 11, 20, 15, 37, tzinfo=ZoneInfo("Pacific/Auckland")
+                )
+                return fixed if tz is None else fixed.astimezone(tz)
+
+        monkeypatch.setattr("services.voice.tools.datetime", FrozenDateTime)
+
+        async def free_calendar(*, starts_at, service_id, staff_member_id=None):
+            return True, starts_at + timedelta(minutes=45)
+
+        monkeypatch.setattr(tools.booking, "availability", free_calendar)
+        result = await tools.check_availability(
+            "Haircut", "", caller_time_phrase="Friday 10:00"
+        )
+
+        assert result["ok"] is True
+        assert result["available"] is True
+        assert result["local_date"] == "2026-11-27"
+        assert result["local_time"] == "10:00"
+        assert result["meridiem_inferred_from_business_hours"] is True
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_find_available_times_returns_only_calendar_confirmed_slots(client, monkeypatch):
+    from datetime import datetime as RealDateTime
+
+    db, live, tools = await booking_context(client, slug="booking-available-times")
+    try:
+        class FrozenDateTime(RealDateTime):
+            @classmethod
+            def now(cls, tz=None):
+                fixed = RealDateTime(2026, 11, 20, 15, 37, tzinfo=ZoneInfo("Pacific/Auckland"))
+                return fixed if tz is None else fixed.astimezone(tz)
+
+        monkeypatch.setattr("services.voice.tools.datetime", FrozenDateTime)
+        checked = []
+
+        async def calendar_availability(*, starts_at, service_id, staff_member_id=None):
+            checked.append(starts_at.astimezone(ZoneInfo("Pacific/Auckland")).strftime("%H:%M"))
+            # The 09:00 slot is busy; later slots are free.
+            return checked[-1] != "09:00", starts_at + timedelta(minutes=45)
+
+        monkeypatch.setattr(tools.booking, "availability", calendar_availability)
+        result = await tools.find_available_times("Haircut", "next Friday")
+
+        assert result["ok"] is True
+        assert result["local_date"] == "2026-11-27"
+        assert [slot["spoken_start"].split(" at ")[-1] for slot in result["slots"]] == [
+            "9:30 AM", "10:00 AM", "10:30 AM"
+        ]
+        assert checked[:4] == ["09:00", "09:30", "10:00", "10:30"]
+
+        same_day = await tools.find_available_times("Haircut", "Friday 10:00")
+        assert same_day["local_date"] == "2026-11-27"
+    finally:
+        await db.close()

@@ -944,6 +944,23 @@ async def run_bot(
 
             if state.intent != "booking" or not state.service:
                 return False
+            if re.search(r"\b(what\s+times?|which\s+times?|availability|available\s+times?)\b", latest_user, re.I):
+                day = extract_booking_day_reference(latest_user) or extract_booking_day_reference(state.caller_time_phrase or "")
+                if not day:
+                    await self._speak("Which day would you like me to check?", direction)
+                    return True
+                day_phrase = state.caller_time_phrase or day
+                result = await tools.find_available_times(str(state.service), day_phrase, state.staff)
+                slots = result.get("slots") or []
+                if result.get("ok") is True and slots:
+                    options = [str(slot.get("spoken_start")) for slot in slots if slot.get("spoken_start")]
+                    call_session.update_voice_state(caller_time_phrase=day, starts_at=None, confirmed=False, last_tool="find_available_times", last_tool_ok=True)
+                    await self._speak(f"I have {', '.join(options)} available on {result.get('day', day)}. Which would you prefer?", direction)
+                elif result.get("ok") is True:
+                    await self._speak(f"I'm sorry, I don't have any available appointments on {result.get('day', day)}. Would another day suit you?", direction)
+                else:
+                    await self._speak("I couldn't check the available times just now. Would you like me to try another day?", direction)
+                return True
             # Once the service is authoritative, date/time caller words can be checked
             # directly. This removes an unnecessary reasoning-model round trip and keeps
             # provider limits from interrupting the basic booking state machine.
