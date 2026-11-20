@@ -36,7 +36,7 @@ from pipecat.services.llm_service import FunctionCallParams
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from apps.voice.prompt import build_voice_system_prompt
+from apps.voice.prompt import build_voice_greeting, build_voice_system_prompt
 from core.config import get_settings
 from database.repositories import TenantRepository
 from database.session import DBSession
@@ -106,10 +106,11 @@ from services.voice.tools import VoiceToolset
 
 settings = get_settings()
 
-# One API process hosts concurrent Pipecat calls. Share the budget across those
-# calls, independently for each Groq model, and keep 1,000 TPM below Groq's 8,000 cap.
+# One API process hosts concurrent Pipecat calls. Groq Developer Plan currently
+# allows 250,000 TPM per model; reserve only 200,000 to retain 20% headroom.
+# The rolling reservation is shared across calls and tracked independently per model.
 _groq_token_budget = RollingModelTokenBudget(
-    tokens_per_minute=7000,
+    tokens_per_minute=200_000,
     window_seconds=60.0,
     max_wait_seconds=1.5,
 )
@@ -266,7 +267,7 @@ async def run_bot(
 
             async def get_chat_completions(self, context):
                 adapter = self.get_llm_adapter()
-                invocation_params = adapter.get_llm_invocation_params(
+                invocation_params = await adapter.get_llm_invocation_params(
                     context,
                     system_instruction=self._settings.system_instruction,
                     convert_developer_to_user=not self.supports_developer_role,
@@ -1822,8 +1823,9 @@ async def run_bot(
     async def on_client_connected(_transport, _client):
         logger.info("PRISM LINK voice client connected for tenant {}", tenant.slug)
         await call_session.start()
-        await call_session.append_transcript("assistant", tenant.greeting)
-        await worker.queue_frames([TTSSpeakFrame(text=tenant.greeting, append_to_context=True)])
+        greeting = build_voice_greeting(tenant)
+        await call_session.append_transcript("assistant", greeting)
+        await worker.queue_frames([TTSSpeakFrame(text=greeting, append_to_context=True)])
 
     @user_aggregator.event_handler("on_user_turn_stopped")
     async def on_user_turn_stopped(_aggregator, _strategy, message: UserTurnStoppedMessage):

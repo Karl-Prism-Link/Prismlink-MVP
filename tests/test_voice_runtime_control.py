@@ -122,3 +122,13 @@ def test_request_token_estimate_includes_completion_reservation():
     )
     assert estimate > 256
     assert estimate >= 320
+
+
+def test_local_tpm_budget_error_is_classified_for_voice_fallback():
+    from services.voice.runtime_control import is_rate_limit_error
+
+    assert is_rate_limit_error(
+        "local_tpm_budget_exceeded: estimated request exceeds admission budget"
+    )
+    assert is_rate_limit_error("429 rate_limit_exceeded from provider")
+    assert not is_rate_limit_error("invalid API key")
