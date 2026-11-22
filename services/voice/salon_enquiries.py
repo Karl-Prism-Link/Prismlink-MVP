@@ -43,12 +43,19 @@ def is_price_question(text: str | None) -> bool:
     return bool(_PRICE_RE.search(str(text or "")))
 
 
-def price_speech(service_name: str, price_cents: int, currency: str = "NZD") -> str:
+def price_speech(
+    service_name: str,
+    price_cents: int,
+    currency: str = "NZD",
+    *,
+    prices_include_gst: bool = False,
+) -> str:
     if price_cents % 100 == 0:
         amount = f"{price_cents // 100:d}"
     else:
         amount = f"{price_cents / 100:.2f}"
-    return f"The {service_name} is {amount} dollars {currency}."
+    gst_phrase = " including GST" if prices_include_gst else ""
+    return f"The {service_name} is {amount} dollars {currency}{gst_phrase}."
 
 
 def is_business_hours_question(text: str | None) -> bool:
