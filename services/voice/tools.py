@@ -551,7 +551,11 @@ class VoiceToolset:
         if (
             not candidates
             and target_date == datetime.now(self.tz).date()
-            and re.search(r"\b(?:monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat|sunday|sun)\b", caller_time_phrase or "", re.I)
+            and re.search(
+                r"\b(?:monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat|sunday|sun)\b",
+                caller_time_phrase or "",
+                re.I,
+            )
         ):
             candidates = await valid_meridiem_candidates(target_date + timedelta(days=7))
             if len(candidates) == 1:
@@ -1096,8 +1100,18 @@ class VoiceToolset:
         elif phrase == "tomorrow":
             target_date = now_local.date() + timedelta(days=1)
         else:
-            weekdays = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
-            match = re.search(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", phrase)
+            weekdays = {
+                "monday": 0,
+                "tuesday": 1,
+                "wednesday": 2,
+                "thursday": 3,
+                "friday": 4,
+                "saturday": 5,
+                "sunday": 6,
+            }
+            match = re.search(
+                r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", phrase
+            )
             if not match:
                 return {"ok": False, "code": "DATE_NOT_RESOLVED"}
             weekday = weekdays[match.group(1)]
@@ -1119,8 +1133,16 @@ class VoiceToolset:
 
         hours_rows = await self.hours.list()
         hours = next((row for row in hours_rows if row.day_of_week == target_date.weekday()), None)
-        if hours_rows and (hours is None or hours.is_closed or hours.opens_at is None or hours.closes_at is None):
-            return {"ok": True, "service": canonical_service_name(service.name), "day": target_date.strftime("%A"), "local_date": target_date.isoformat(), "slots": []}
+        if hours_rows and (
+            hours is None or hours.is_closed or hours.opens_at is None or hours.closes_at is None
+        ):
+            return {
+                "ok": True,
+                "service": canonical_service_name(service.name),
+                "day": target_date.strftime("%A"),
+                "local_date": target_date.isoformat(),
+                "slots": [],
+            }
 
         opening = hours.opens_at if hours else datetime.strptime("09:00", "%H:%M").time()
         closing = hours.closes_at if hours else datetime.strptime("17:00", "%H:%M").time()
@@ -1131,14 +1153,29 @@ class VoiceToolset:
             starts = cursor.astimezone(UTC)
             if starts > datetime.now(UTC):
                 try:
-                    available, _ = await self.booking.availability(starts_at=starts, service_id=service.id, staff_member_id=staff.id if staff else None)
+                    available, _ = await self.booking.availability(
+                        starts_at=starts,
+                        service_id=service.id,
+                        staff_member_id=staff.id if staff else None,
+                    )
                 except HTTPException as exc:
                     return self._error_payload(exc)
                 if available:
                     display = self._display_local_datetime(starts)
-                    slots.append({"starts_at": self._local_iso(starts), "spoken_start": display["spoken_start"]})
+                    slots.append(
+                        {
+                            "starts_at": self._local_iso(starts),
+                            "spoken_start": display["spoken_start"],
+                        }
+                    )
             cursor += timedelta(minutes=30)
-        return {"ok": True, "service": canonical_service_name(service.name), "day": target_date.strftime("%A"), "local_date": target_date.isoformat(), "slots": slots}
+        return {
+            "ok": True,
+            "service": canonical_service_name(service.name),
+            "day": target_date.strftime("%A"),
+            "local_date": target_date.isoformat(),
+            "slots": slots,
+        }
 
     async def book_appointment(
         self,

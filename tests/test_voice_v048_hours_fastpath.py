@@ -83,7 +83,6 @@ def test_price_speech_formats_configured_cents_without_calculation():
     )
 
 
-
 def test_price_enquiry_clears_prepared_consequential_actions():
     # Regression fixture for the P1 safety finding: price clarification must not
     # leave an earlier booking/reschedule/cancel/message proposal armed.
