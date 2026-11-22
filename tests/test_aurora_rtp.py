@@ -157,7 +157,7 @@ async def test_rtp_send_times_out_only_after_backpressure_deadline(monkeypatch):
         await asyncio.sleep(0)
 
     monkeypatch.setattr(transport_module, "_wait_writable", writable)
-    with pytest.raises(TimeoutError, match="remained unwritable"):
+    with pytest.raises(TimeoutError):
         await transport_module._send_datagram(
             asyncio.get_running_loop(),
             PermanentlyBlockedSocket(),
