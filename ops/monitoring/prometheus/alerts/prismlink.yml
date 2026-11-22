@@ -10,6 +10,15 @@ groups:
           summary: "PRISM LINK API metrics endpoint is unreachable"
           runbook: "Check prism-link-api.service and localhost:8000/metrics."
 
+      - alert: PrismLinkNodeExporterDown
+        expr: up{job=~"hpmicro-node|aurora-node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.host }} Node Exporter is unreachable; host health alerts lack metrics"
+          runbook: "Check Node Exporter service, scrape target and Tailscale connectivity for the affected host."
+
       - alert: AuroraMetricsDown
         expr: up{job="aurora"} == 0
         for: 2m
