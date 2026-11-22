@@ -13,7 +13,7 @@ confirmed booking reached Google Calendar.
 | Signal | What to show | Initial alert |
 |---|---|---|
 | Aurora service | `prismlink-sip.service` state, uptime, restarts | Service stopped or repeatedly restarting |
-| 2talk registration | Registered state and last successful registration time | Registration lost for more than 60 seconds |
+| Hero SIP registration | Registered state and last successful registration time | Registration lost for more than 60 seconds |
 | Inbound call events | Ringing events, API accepted/rejected counts, HTTP status | Any repeated 4xx/5xx callback failures; page on sustained failures |
 | Active calls | Current calls versus configured Aurora and API capacity | Capacity reached or rejected calls increase |
 | Pipecat readiness | Pipeline startup success/failure and startup duration | Startup failures or timeout |
