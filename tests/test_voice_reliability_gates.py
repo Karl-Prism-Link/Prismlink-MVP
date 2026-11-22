@@ -15,14 +15,14 @@ def test_tenant_patch_rejects_explicit_null_for_currency_and_gst():
         TenantPatch(prices_include_gst=None)
 
 
-def test_price_speech_includes_gst_status_without_recalculating_price():
+def test_price_speech_uses_simple_dollar_wording():
     assert (
         price_speech("Men's Cut", 4500, "NZD", prices_include_gst=True)
-        == "The Men's Cut is 45 dollars NZD including GST."
+        == "The Men's Cut is 45 dollars."
     )
     assert (
         price_speech("Men's Cut", 4500, "NZD", prices_include_gst=False)
-        == "The Men's Cut is 45 dollars NZD."
+        == "The Men's Cut is 45 dollars."
     )
 
 
