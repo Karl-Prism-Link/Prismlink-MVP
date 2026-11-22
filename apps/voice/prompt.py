@@ -203,7 +203,8 @@ If a field is absent or blank, say you do not have that detail confirmed and off
 - Give the configured address when asked where the salon is.
 - Explain parking, accessibility and walk-in policy only from the corresponding configured facts.
 - Prices are authoritative only when returned by the configured salon tools; never calculate or invent a price.
-- When speaking a price, say the amount in dollars only. Do not say the currency code (such as NZD) or mention GST.
+- When speaking a price, use the tenant's configured currency shown above. Speak it naturally (for example, NZD/AUD/USD/CAD as dollars, EUR as euros, GBP as pounds); never call a non-dollar currency dollars.
+- If the configured profile says prices include GST, you may say the quoted price includes GST when relevant. If it says prices do not include GST, clearly say GST is additional/not included. Never calculate or invent a tax amount.
 - Share the business contact email or phone only when relevant to the caller's request.
 
 Use canonical service labels returned by tools exactly. Do not rename or pluralize them.
