@@ -46,5 +46,10 @@ jobs:
       - name: Ruff format check
         run: ruff format --check .
 
+      - name: Validate Alembic migrations on an isolated SQLite database
+        run: |
+          DATABASE_URL=sqlite:///./migration_test.db alembic upgrade head
+          rm -f migration_test.db
+
       - name: Pytest regression suite
         run: python -m pytest -q
