@@ -112,11 +112,11 @@ from services.voice.tools import VoiceToolset
 
 settings = get_settings()
 
-# The configured Groq gpt-oss-20b/120b models have a documented 8,000 TPM
-# base limit. Reserve 7,000 TPM per model to leave headroom for estimation error.
+# Default Groq gpt-oss-20b/120b base quota is 8,000 TPM. Keep a conservative
+# 7,000 TPM default, configurable for the actual organisation/model quota.
 # The rolling reservation is shared across calls and tracked independently per model.
 _groq_token_budget = RollingModelTokenBudget(
-    tokens_per_minute=7_000,
+    tokens_per_minute=settings.groq_tokens_per_minute,
     window_seconds=60.0,
     max_wait_seconds=1.5,
 )
