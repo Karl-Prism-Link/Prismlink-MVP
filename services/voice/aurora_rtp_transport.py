@@ -203,7 +203,7 @@ class _Output(BaseOutputTransport):
                     except BlockingIOError:
                         remaining = deadline - loop.time()
                         if remaining <= 0:
-                            raise TimeoutError("RTP socket remained unwritable")
+                            raise TimeoutError("RTP socket remained unwritable") from None
                         await asyncio.wait_for(
                             _wait_writable(loop, transport.sock), timeout=remaining
                         )

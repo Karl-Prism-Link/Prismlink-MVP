@@ -246,6 +246,7 @@ async def test_booking_confirmation_without_fresh_explicit_yes_is_rejected(clien
     finally:
         await db.close()
 
+
 @pytest.mark.asyncio
 async def test_same_day_weekday_bare_time_rolls_to_next_week_when_opening_time_has_passed(
     client, monkeypatch
@@ -254,12 +255,11 @@ async def test_same_day_weekday_bare_time_rolls_to_next_week_when_opening_time_h
 
     db, live, tools = await booking_context(client, slug="booking-same-day-past-bare-time")
     try:
+
         class FrozenDateTime(RealDateTime):
             @classmethod
             def now(cls, tz=None):
-                fixed = RealDateTime(
-                    2026, 11, 20, 15, 37, tzinfo=ZoneInfo("Pacific/Auckland")
-                )
+                fixed = RealDateTime(2026, 11, 20, 15, 37, tzinfo=ZoneInfo("Pacific/Auckland"))
                 return fixed if tz is None else fixed.astimezone(tz)
 
         monkeypatch.setattr("services.voice.tools.datetime", FrozenDateTime)
@@ -268,9 +268,7 @@ async def test_same_day_weekday_bare_time_rolls_to_next_week_when_opening_time_h
             return True, starts_at + timedelta(minutes=45)
 
         monkeypatch.setattr(tools.booking, "availability", free_calendar)
-        result = await tools.check_availability(
-            "Haircut", "", caller_time_phrase="Friday 10:00"
-        )
+        result = await tools.check_availability("Haircut", "", caller_time_phrase="Friday 10:00")
 
         assert result["ok"] is True
         assert result["available"] is True
@@ -287,6 +285,7 @@ async def test_find_available_times_returns_only_calendar_confirmed_slots(client
 
     db, live, tools = await booking_context(client, slug="booking-available-times")
     try:
+
         class FrozenDateTime(RealDateTime):
             @classmethod
             def now(cls, tz=None):
@@ -307,7 +306,9 @@ async def test_find_available_times_returns_only_calendar_confirmed_slots(client
         assert result["ok"] is True
         assert result["local_date"] == "2026-11-27"
         assert [slot["spoken_start"].split(" at ")[-1] for slot in result["slots"]] == [
-            "9:30 AM", "10:00 AM", "10:30 AM"
+            "9:30 AM",
+            "10:00 AM",
+            "10:30 AM",
         ]
         assert checked[:4] == ["09:00", "09:30", "10:00", "10:30"]
 

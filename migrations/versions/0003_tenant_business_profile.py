@@ -16,8 +16,13 @@ depends_on = None
 def upgrade() -> None:
     op.add_column("tenants", sa.Column("address", sa.String(length=300), nullable=True))
     op.add_column("tenants", sa.Column("contact_email", sa.String(length=320), nullable=True))
-    op.add_column("tenants", sa.Column("currency", sa.String(length=3), server_default="NZD", nullable=False))
-    op.add_column("tenants", sa.Column("prices_include_gst", sa.Boolean(), server_default=sa.true(), nullable=False))
+    op.add_column(
+        "tenants", sa.Column("currency", sa.String(length=3), server_default="NZD", nullable=False)
+    )
+    op.add_column(
+        "tenants",
+        sa.Column("prices_include_gst", sa.Boolean(), server_default=sa.true(), nullable=False),
+    )
     op.add_column("tenants", sa.Column("ai_disclosure", sa.Text(), nullable=True))
     op.add_column("tenants", sa.Column("walk_ins_policy", sa.Text(), nullable=True))
     op.add_column("tenants", sa.Column("parking_info", sa.Text(), nullable=True))

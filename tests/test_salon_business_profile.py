@@ -2,7 +2,9 @@ from tests.test_mvp import auth, register
 
 
 def test_salon_business_profile_fields_round_trip(client):
-    token = register(client, name="Luxe Hair & Beauty", slug="luxe-profile", email="owner@luxe.example")
+    token = register(
+        client, name="Luxe Hair & Beauty", slug="luxe-profile", email="owner@luxe.example"
+    )
     headers = auth(token)
     payload = {
         "phone_number": "09 555 0100",

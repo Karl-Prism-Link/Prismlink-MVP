@@ -90,7 +90,6 @@ def test_asyncio_reader_receives_udp_datagram() -> None:
     asyncio.run(exercise())
 
 
-
 def test_nonblocking_udp_sendto_works_under_uvloop() -> None:
     import uvloop
 
@@ -115,4 +114,5 @@ def test_nonblocking_udp_sendto_works_under_uvloop() -> None:
 
     # Exercise the same synchronous non-blocking send path used by the RTP transport.
     from services.voice.aurora_rtp_transport import _recvfrom as _recv_for_test
+
     uvloop.run(run_with_loop())

@@ -5,7 +5,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from database.models import Tenant
 
-
 _DEFAULT_AI_DISCLOSURE = "I'm the salon's AI receptionist."
 
 
