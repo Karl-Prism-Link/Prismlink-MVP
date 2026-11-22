@@ -35,6 +35,8 @@ def test_voice_prompt_includes_configured_tenant_profile_facts():
     ):
         assert fact in prompt
     assert "Give the configured address when asked where the salon is." in prompt
+    assert "use the tenant's configured currency shown above" in prompt
+    assert "clearly say GST is additional/not included" in prompt
     assert (
         "- Prices are authoritative only when returned by the configured salon tools; never calculate or invent a price."
         in prompt
