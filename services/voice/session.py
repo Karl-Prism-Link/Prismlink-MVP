@@ -357,8 +357,8 @@ class LiveCallSession:
     def immediate_safety_active(self) -> bool:
         return self.voice_state.immediate_safety_active
 
-    def activate_immediate_safety(self, reason: str) -> None:
-        """Make immediate safety authoritative for the remainder of this live call."""
+    async def activate_immediate_safety(self, reason: str) -> None:
+        """Persist immediate safety before any ordinary workflow can run."""
         self.voice_state.immediate_safety_active = True
         self.voice_state.safety_reason = reason
         self.voice_state.safety_response_sent = False
@@ -369,12 +369,39 @@ class LiveCallSession:
         self.set_booking_phone_capture(False)
         self.set_booking_name_capture(False)
         self.clear_message_flow()
+        if self.call is not None:
+            self.call.immediate_safety_active = True
+            self.call.safety_reason = reason
+            self.call.safety_response_sent = False
+            await self.db.commit()
 
-    def mark_safety_response_sent(self) -> None:
+    async def mark_safety_response_sent(self) -> None:
         self.voice_state.safety_response_sent = True
+        if self.call is not None:
+            self.call.safety_response_sent = True
+            await self.db.commit()
 
     async def start(self) -> Call:
         if self.call is not None:
+            return self.call
+        # A worker may be recreated for the same still-active provider call. Reuse
+        # its durable call row and restore the safety latch before routing any turn.
+        existing_result = await self.db.execute(
+            select(Call)
+            .where(
+                Call.tenant_id == self.tenant_id,
+                Call.external_call_id == self.external_call_id,
+                Call.status == "in_progress",
+            )
+            .order_by(Call.started_at.desc())
+            .limit(1)
+        )
+        existing_call = existing_result.scalars().first()
+        if existing_call is not None:
+            self.call = existing_call
+            self.voice_state.immediate_safety_active = bool(existing_call.immediate_safety_active)
+            self.voice_state.safety_reason = existing_call.safety_reason
+            self.voice_state.safety_response_sent = bool(existing_call.safety_response_sent)
             return self.call
         now = utcnow()
         self.call = Call(
@@ -388,6 +415,9 @@ class LiveCallSession:
             answered_at=now,
             ended_at=None,
             duration_seconds=None,
+            immediate_safety_active=self.voice_state.immediate_safety_active,
+            safety_reason=self.voice_state.safety_reason,
+            safety_response_sent=self.voice_state.safety_response_sent,
             created_at=now,
         )
         self.db.add(self.call)
