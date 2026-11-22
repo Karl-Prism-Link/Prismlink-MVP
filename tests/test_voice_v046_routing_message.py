@@ -213,7 +213,7 @@ async def test_immediate_safety_blocks_every_voice_tool_at_the_tool_boundary():
     session._booking_name_capture_active = True
     session._message_phone_digits = "0211234567"
     session._verified_management_phone = "0211234567"
-    session.activate_immediate_safety("immediate_emergency")
+    await session.activate_immediate_safety("immediate_emergency")
 
     tools = VoiceToolset.__new__(VoiceToolset)
     tools.call_session = session
