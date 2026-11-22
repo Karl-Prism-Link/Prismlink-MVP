@@ -51,6 +51,17 @@ class VoiceToolset:
         except ZoneInfoNotFoundError:
             self.tz = ZoneInfo("Pacific/Auckland")
 
+    def _safety_blocked(self) -> dict | None:
+        """Fail closed at the tool boundary while immediate safety is active."""
+        if not self.call_session.immediate_safety_active:
+            return None
+        return {
+            "ok": False,
+            "code": "IMMEDIATE_SAFETY_ACTIVE",
+            "safety_active": True,
+            "message": "Immediate safety is active. Ordinary salon workflows are blocked.",
+        }
+
     @staticmethod
     def _normalise(value: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
@@ -813,6 +824,9 @@ class VoiceToolset:
         Generic booking availability is unsafe here because the LLM may pass a service ID
         where a label is expected, or may accidentally change the service/duration.
         """
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         verified_phone = self._verified_management_phone_from_caller()
         if not verified_phone:
             return self._management_identity_error()
@@ -932,6 +946,9 @@ class VoiceToolset:
         return result
 
     async def get_salon_information(self, question: str) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         services = [row for row in await self.services.list() if row.is_active]
         staff = [row for row in await self.staff.list() if row.is_active]
         hours = await self.hours.list()
@@ -980,6 +997,9 @@ class VoiceToolset:
         staff_name: str | None = None,
         caller_time_phrase: str | None = None,
     ) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         service, service_choices = await self._resolve_service(service_name)
         if service is None:
             return {
@@ -1086,6 +1106,9 @@ class VoiceToolset:
         self, service_name: str, day_phrase: str, staff_name: str | None = None
     ) -> dict:
         """Return up to three calendar-confirmed appointment starts on a caller-stated day."""
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         service, service_choices = await self._resolve_service(service_name)
         if service is None:
             return {"ok": False, "code": "SERVICE_NOT_RESOLVED", "choices": service_choices}
@@ -1190,6 +1213,9 @@ class VoiceToolset:
         # A final confirmation commits the exact previously prepared details. Do not
         # re-parse a newer transcript and accidentally shorten/replace the phone number
         # or revert an explicitly spelled name.
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         if confirmed:
             prepared = self.call_session.prepared_booking_payload
             if prepared is None:
@@ -1453,6 +1479,9 @@ class VoiceToolset:
         customer_name: str | None = None,
         caller_time_phrase: str | None = None,
     ) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         verified_phone = self._verified_management_phone_from_caller()
         if not verified_phone:
             return self._management_identity_error()
@@ -1554,6 +1583,9 @@ class VoiceToolset:
         confirmed: bool,
         caller_time_phrase: str | None = None,
     ) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         verified_phone = self._verified_management_phone_from_caller()
         if not verified_phone:
             return self._management_identity_error()
@@ -1675,6 +1707,9 @@ class VoiceToolset:
         }
 
     async def cancel_appointment(self, appointment_id: str, confirmed: bool) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         verified_phone = self._verified_management_phone_from_caller()
         if not verified_phone:
             return self._management_identity_error()
@@ -1786,6 +1821,9 @@ class VoiceToolset:
         exact message, recipient and callback number have been read back and the
         latest finalized caller turn is an explicit affirmation.
         """
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
 
         if confirmed:
             prepared = self.call_session.prepared_message_payload

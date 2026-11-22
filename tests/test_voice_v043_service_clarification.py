@@ -1,3 +1,5 @@
+import pytest
+
 from services.service_names import configured_service_name_from_speech
 from services.voice.contact import recent_booking_datetime_phrase
 
@@ -26,3 +28,17 @@ def test_datetime_context_combines_split_day_and_time_without_calculating_date()
 def test_service_only_reply_without_datetime_context_does_not_invent_time():
     turns = ("I want to book a cut.", "A means cut.")
     assert recent_booking_datetime_phrase(turns) is None
+
+
+@pytest.mark.parametrize(
+    "spoken_request",
+    [
+        "woman's cut",
+        "woman’s cut",
+        "My partner needs a woman's cut",
+        "My partner needs a woman’s haircut",
+    ],
+)
+def test_womans_cut_for_partner_resolves_to_womens_cut(spoken_request):
+    configured = ("Women's Cut", "Men's Cut", "Blow Wave", "Colour")
+    assert configured_service_name_from_speech(spoken_request, configured) == "Women's Cut"

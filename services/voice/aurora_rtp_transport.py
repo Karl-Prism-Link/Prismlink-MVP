@@ -51,6 +51,25 @@ async def _wait_writable(loop: asyncio.AbstractEventLoop, sock: socket.socket) -
         loop.remove_writer(fd)
 
 
+async def _send_datagram(
+    loop: asyncio.AbstractEventLoop,
+    sock: socket.socket,
+    packet: bytes,
+    destination: tuple[str, int],
+    timeout: float,
+) -> int:
+    """Send one UDP datagram, retrying transient non-blocking backpressure."""
+    deadline = loop.time() + timeout
+    while True:
+        try:
+            return sock.sendto(packet, destination)
+        except BlockingIOError:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError("RTP socket remained unwritable") from None
+            await asyncio.wait_for(_wait_writable(loop, sock), timeout=remaining)
+
+
 async def _recvfrom(loop: asyncio.AbstractEventLoop, sock: socket.socket, size: int):
     """Receive one UDP datagram using the loop's file-descriptor readiness API."""
     future = loop.create_future()
@@ -195,18 +214,13 @@ class _Output(BaseOutputTransport):
                 # RTP packets are small UDP datagrams; sendto() is safe on this
                 # non-blocking socket and works with uvloop, whose sock_sendto()
                 # coroutine API is not implemented.
-                deadline = loop.time() + transport.send_timeout
-                while True:
-                    try:
-                        sent = transport.sock.sendto(packet, transport.aurora_destination)
-                        break
-                    except BlockingIOError:
-                        remaining = deadline - loop.time()
-                        if remaining <= 0:
-                            raise TimeoutError("RTP socket remained unwritable") from None
-                        await asyncio.wait_for(
-                            _wait_writable(loop, transport.sock), timeout=remaining
-                        )
+                sent = await _send_datagram(
+                    loop,
+                    transport.sock,
+                    packet,
+                    transport.aurora_destination,
+                    transport.send_timeout,
+                )
                 if sent != len(packet):
                     raise OSError(f"short UDP send: {sent}/{len(packet)} bytes")
                 self.first_packet = False

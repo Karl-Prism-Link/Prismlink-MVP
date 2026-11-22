@@ -25,8 +25,10 @@ _CANONICAL_ALIASES: dict[str, set[str]] = {
         "womens cuts",
         "woman cut",
         "womans cut",
+        "woman s cut",
         "womens haircut",
         "woman haircut",
+        "woman s haircut",
     },
     "Blow Wave": {
         "blow wave",

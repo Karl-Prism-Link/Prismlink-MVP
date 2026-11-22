@@ -116,3 +116,52 @@ def test_nonblocking_udp_sendto_works_under_uvloop() -> None:
     from services.voice.aurora_rtp_transport import _recvfrom as _recv_for_test
 
     uvloop.run(run_with_loop())
+
+
+@pytest.mark.asyncio
+async def test_rtp_send_retries_transient_socket_backpressure(monkeypatch):
+    from services.voice import aurora_rtp_transport as transport_module
+
+    class BackpressureSocket:
+        def __init__(self):
+            self.attempts = 0
+
+        def sendto(self, packet, destination):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise BlockingIOError("temporary UDP send buffer pressure")
+            return len(packet)
+
+    async def writable(_loop, _sock):
+        return None
+
+    monkeypatch.setattr(transport_module, "_wait_writable", writable)
+    sock = BackpressureSocket()
+    packet = b"rtp-packet"
+    sent = await transport_module._send_datagram(
+        asyncio.get_running_loop(), sock, packet, ("127.0.0.1", 9000), timeout=0.5
+    )
+    assert sent == len(packet)
+    assert sock.attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_rtp_send_times_out_only_after_backpressure_deadline(monkeypatch):
+    from services.voice import aurora_rtp_transport as transport_module
+
+    class PermanentlyBlockedSocket:
+        def sendto(self, packet, destination):
+            raise BlockingIOError("socket remains unwritable")
+
+    async def writable(_loop, _sock):
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(transport_module, "_wait_writable", writable)
+    with pytest.raises(TimeoutError, match="remained unwritable"):
+        await transport_module._send_datagram(
+            asyncio.get_running_loop(),
+            PermanentlyBlockedSocket(),
+            b"rtp-packet",
+            ("127.0.0.1", 9000),
+            timeout=0.01,
+        )
