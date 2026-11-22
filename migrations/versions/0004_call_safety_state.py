@@ -16,7 +16,9 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "calls",
-        sa.Column("immediate_safety_active", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.Column(
+            "immediate_safety_active", sa.Boolean(), server_default=sa.false(), nullable=False
+        ),
     )
     op.add_column("calls", sa.Column("safety_reason", sa.Text(), nullable=True))
     op.add_column(
