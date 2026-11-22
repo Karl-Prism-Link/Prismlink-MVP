@@ -35,6 +35,22 @@ from services.voice.aurora_rtp import (
 log = logging.getLogger(__name__)
 
 
+async def _wait_writable(loop: asyncio.AbstractEventLoop, sock: socket.socket) -> None:
+    """Wait until a non-blocking UDP socket can accept another datagram."""
+    future = loop.create_future()
+
+    def writable() -> None:
+        if not future.done():
+            future.set_result(None)
+
+    fd = sock.fileno()
+    loop.add_writer(fd, writable)
+    try:
+        await future
+    finally:
+        loop.remove_writer(fd)
+
+
 async def _recvfrom(loop: asyncio.AbstractEventLoop, sock: socket.socket, size: int):
     """Receive one UDP datagram using the loop's file-descriptor readiness API."""
     future = loop.create_future()
@@ -179,7 +195,18 @@ class _Output(BaseOutputTransport):
                 # RTP packets are small UDP datagrams; sendto() is safe on this
                 # non-blocking socket and works with uvloop, whose sock_sendto()
                 # coroutine API is not implemented.
-                sent = transport.sock.sendto(packet, transport.aurora_destination)
+                deadline = loop.time() + transport.send_timeout
+                while True:
+                    try:
+                        sent = transport.sock.sendto(packet, transport.aurora_destination)
+                        break
+                    except BlockingIOError:
+                        remaining = deadline - loop.time()
+                        if remaining <= 0:
+                            raise TimeoutError("RTP socket remained unwritable")
+                        await asyncio.wait_for(
+                            _wait_writable(loop, transport.sock), timeout=remaining
+                        )
                 if sent != len(packet):
                     raise OSError(f"short UDP send: {sent}/{len(packet)} bytes")
                 self.first_packet = False
