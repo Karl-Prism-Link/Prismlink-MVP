@@ -402,6 +402,20 @@ class LiveCallSession:
             self.voice_state.immediate_safety_active = bool(existing_call.immediate_safety_active)
             self.voice_state.safety_reason = existing_call.safety_reason
             self.voice_state.safety_response_sent = bool(existing_call.safety_response_sent)
+            transcript_result = await self.db.execute(
+                select(TranscriptMessage)
+                .where(TranscriptMessage.call_id == existing_call.id)
+                .order_by(TranscriptMessage.sequence_number.desc())
+                .limit(12)
+            )
+            recent_messages = list(reversed(transcript_result.scalars().all()))
+            if recent_messages:
+                latest = recent_messages[-1]
+                self._sequence = latest.sequence_number
+                self._last_transcript = (latest.speaker, latest.text)
+                self._caller_transcripts = [
+                    message.text for message in recent_messages if message.speaker == "caller"
+                ][-12:]
             return self.call
         now = utcnow()
         self.call = Call(
