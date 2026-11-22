@@ -646,12 +646,10 @@ async def run_bot(
                     )
                     return True
 
-                currency = getattr(tenant, "currency", "NZD") or "NZD"
                 speech = price_speech(
                     service_name,
                     service.price,
-                    currency,
-                    prices_include_gst=bool(getattr(tenant, "prices_include_gst", False)),
+                    prices_include_gst=bool(getattr(tenant, "prices_include_gst", True)),
                 )
                 # A price clarification is a separate enquiry. Never leave a previously
                 # prepared consequential action armed behind it: a later bare "yes" must
