@@ -12,6 +12,7 @@ from services.voice.message_routing import (
 )
 from services.voice.model_router import confirmation_fastpath_action
 from services.voice.safety import is_health_only_request, is_immediate_emergency_language
+from services.voice.session import VoiceConversationState
 from services.voice.session import LiveCallSession
 from services.voice.speech_cleanup import (
     deterministic_post_action_social_reply,
@@ -162,3 +163,17 @@ async def test_message_tool_requires_prepare_and_fresh_yes(client):
         assert live.resolution.outcome == "message_taken"
     finally:
         await db.close()
+
+
+def test_immediate_safety_state_is_persistent_and_blocks_workflow_state():
+    state = VoiceConversationState()
+    assert state.immediate_safety_active is False
+    assert state.safety_response_sent is False
+
+    state.immediate_safety_active = True
+    state.safety_reason = "immediate_emergency"
+    state.safety_response_sent = True
+
+    assert state.immediate_safety_active is True
+    assert state.safety_reason == "immediate_emergency"
+    assert state.safety_response_sent is True

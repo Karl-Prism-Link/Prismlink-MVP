@@ -40,6 +40,9 @@ class VoiceConversationState:
     message_text: str | None = None
     message_callback_phone: str | None = None
     message_customer_name: str | None = None
+    immediate_safety_active: bool = False
+    safety_reason: str | None = None
+    safety_response_sent: bool = False
 
     def summary(self) -> str:
         def value(item: object | None) -> str:
@@ -57,7 +60,10 @@ class VoiceConversationState:
             f"message_target={value(self.message_target)}; "
             f"message_text={'set' if self.message_text else 'missing'}; "
             f"message_callback_phone={value(self.message_callback_phone)}; "
-            f"message_customer_name={value(self.message_customer_name)}. "
+            f"message_customer_name={value(self.message_customer_name)}; "
+            f"immediate_safety_active={str(self.immediate_safety_active).lower()}; "
+            f"safety_reason={value(self.safety_reason)}; "
+            f"safety_response_sent={str(self.safety_response_sent).lower()}. "
             "This is memory only; tool results remain authoritative."
         )
 
@@ -346,6 +352,26 @@ class LiveCallSession:
         for key, value in changes.items():
             if hasattr(self.voice_state, key) and value is not None and value != "":
                 setattr(self.voice_state, key, value)
+
+    @property
+    def immediate_safety_active(self) -> bool:
+        return self.voice_state.immediate_safety_active
+
+    def activate_immediate_safety(self, reason: str) -> None:
+        """Make immediate safety authoritative for the remainder of this live call."""
+        self.voice_state.immediate_safety_active = True
+        self.voice_state.safety_reason = reason
+        self.voice_state.safety_response_sent = False
+        self.clear_prepared_booking()
+        self.clear_prepared_reschedule()
+        self.clear_prepared_cancel()
+        self.clear_prepared_message()
+        self.set_booking_phone_capture(False)
+        self.set_booking_name_capture(False)
+        self.clear_message_flow()
+
+    def mark_safety_response_sent(self) -> None:
+        self.voice_state.safety_response_sent = True
 
     async def start(self) -> Call:
         if self.call is not None:

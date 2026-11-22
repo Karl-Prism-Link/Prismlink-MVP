@@ -1179,6 +1179,28 @@ async def run_bot(
             if latest_user and latest_user not in call_session.recent_caller_transcripts:
                 await call_session.append_transcript("caller", latest_user)
 
+            # Immediate safety is a persistent runtime state, not an LLM/context hint.
+            # Once active, it is checked before every ordinary workflow and cannot be
+            # cleared by model routing, context trimming, or a later salon request.
+            if is_immediate_emergency_language(latest_user):
+                call_session.activate_immediate_safety("immediate_emergency")
+
+            if call_session.immediate_safety_active:
+                response = "Please call 111 now. I can't provide medical help."
+                if not call_session.voice_state.safety_response_sent:
+                    response = "I can't provide medical help. Please call 111 now."
+                call_session.set_resolution(
+                    "out_of_scope",
+                    "Immediate safety state active; ordinary salon workflows are blocked.",
+                )
+                await self._speak(response, direction)
+                call_session.mark_safety_response_sent()
+                logger.warning(
+                    "PRISM LINK immediate safety active; ordinary workflow routing blocked reason={}",
+                    call_session.voice_state.safety_reason,
+                )
+                return
+
             farewell = is_farewell_utterance(latest_user)
             if call_session.closing_acknowledged:
                 if farewell:
@@ -1204,14 +1226,11 @@ async def run_bot(
                 return
 
             if is_health_only_request(latest_user):
-                if is_immediate_emergency_language(latest_user):
-                    response = "I can't provide medical help. Please call 111 now."
-                else:
-                    response = (
-                        "I'm sorry that happened. I can't provide medical advice. "
-                        "If you need medical help, please contact a healthcare professional. "
-                        "Is there anything salon-related I can help with?"
-                    )
+                response = (
+                    "I'm sorry that happened. I can't provide medical advice. "
+                    "If you need medical help, please contact a healthcare professional. "
+                    "Is there anything salon-related I can help with?"
+                )
                 call_session.set_resolution(
                     "out_of_scope",
                     "Caller raised a health-related request; the receptionist declined medical guidance.",
