@@ -649,20 +649,25 @@ async def run_bot(
                     return True
 
                 currency = getattr(tenant, "currency", "NZD") or "NZD"
-                speech = price_speech(service_name, service.price, currency)
-                current_intent = call_session.voice_state.intent
-                if current_intent not in {"booking", "reschedule", "appointment_management"}:
-                    call_session.clear_prepared_booking()
-                    call_session.clear_prepared_reschedule()
-                    call_session.clear_prepared_cancel()
-                    call_session.clear_prepared_message()
-                    call_session.update_voice_state(
-                        intent="enquiry", confirmed=False, last_tool="get_salon_information", last_tool_ok=True
-                    )
-                else:
-                    call_session.update_voice_state(
-                        confirmed=False, last_tool="get_salon_information", last_tool_ok=True
-                    )
+                speech = price_speech(
+                    service_name,
+                    service.price,
+                    currency,
+                    prices_include_gst=bool(getattr(tenant, "prices_include_gst", False)),
+                )
+                # A price clarification is a separate enquiry. Never leave a previously
+                # prepared consequential action armed behind it: a later bare "yes" must
+                # not confirm an action the caller has not just reviewed.
+                call_session.clear_prepared_booking()
+                call_session.clear_prepared_reschedule()
+                call_session.clear_prepared_cancel()
+                call_session.clear_prepared_message()
+                call_session.update_voice_state(
+                    intent="enquiry",
+                    confirmed=False,
+                    last_tool="get_salon_information",
+                    last_tool_ok=True,
+                )
                 call_session.set_resolution(
                     "enquiry_resolved",
                     f"Answered configured salon price enquiry for {service_name}.",
