@@ -48,6 +48,26 @@ def test_compact_context_keeps_recent_user_turns_and_replaces_state():
     assert any(message.get("role") == "tool" for message in result)
 
 
+def test_compact_context_can_fall_back_to_current_turn_only_without_losing_state():
+    messages = [
+        {"role": "developer", "content": "static salon policy"},
+        {"role": "developer", "content": f"{STATE_MARKER} service=Women's Cut; confirmed=true"},
+        {"role": "user", "content": "I want to book a haircut"},
+        {"role": "assistant", "content": "Which day?"},
+        {"role": "user", "content": "Wednesday"},
+        {"role": "assistant", "content": "What time?"},
+        {"role": "user", "content": "12 noon"},
+    ]
+    result = compact_context_messages(
+        messages,
+        max_user_turns=1,
+        state_summary="service=Women's Cut; confirmed=true",
+    )
+    assert [m["content"] for m in result if m.get("role") == "user"] == ["12 noon"]
+    assert any(m.get("content") == "static salon policy" for m in result)
+    assert any("confirmed=true" in str(m.get("content")) for m in result)
+
+
 def test_voice_state_is_compact_and_structured():
     state = VoiceConversationState(service="Men's Cut", caller_time_phrase="Monday at two o'clock")
     summary = state.summary()

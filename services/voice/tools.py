@@ -247,11 +247,12 @@ class VoiceToolset:
             value = value.replace(tzinfo=UTC)
         local = value.astimezone(self.tz)
         hour12 = local.strftime("%I").lstrip("0") or "12"
+        year_suffix = f" {local.year}" if local.year != datetime.now(self.tz).year else ""
         return {
             "weekday": local.strftime("%A"),
             "local_date": local.date().isoformat(),
             "local_time": local.strftime("%H:%M"),
-            "spoken_start": f"{local.strftime('%A')} {local.day} {local.strftime('%B %Y')} at {hour12}:{local.strftime('%M %p')}",
+            "spoken_start": f"{local.strftime('%A')} {local.day} {local.strftime('%B')}{year_suffix} at {hour12}:{local.strftime('%M %p')}",
         }
 
     def _resolve_caller_datetime(
