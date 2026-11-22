@@ -201,6 +201,7 @@ async def test_immediate_safety_blocks_every_voice_tool_at_the_tool_boundary():
     from services.voice.tools import VoiceToolset
 
     session = LiveCallSession.__new__(LiveCallSession)
+    session.call = None
     session.voice_state = VoiceConversationState()
     session._prepared_booking_fingerprint = "booking"
     session._prepared_booking_payload = {"public": {"service": "Women's Cut"}}
