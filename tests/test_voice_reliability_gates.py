@@ -28,11 +28,11 @@ def test_price_speech_includes_gst_status_without_recalculating_price():
 
 @pytest.mark.asyncio
 async def test_voice_price_tool_result_exposes_human_units_and_gst(client):
-    from tests.test_mvp import add_service, register
     from database.repositories import TenantRepository
     from database.session import DBSession
     from services.voice.session import LiveCallSession
     from services.voice.tools import VoiceToolset
+    from tests.test_mvp import add_service, register
 
     token = register(
         client,
