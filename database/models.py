@@ -128,6 +128,9 @@ class Call(Base):
     answered_at: Mapped[datetime | None] = mapped_column(nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    immediate_safety_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    safety_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    safety_response_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime]
 
 
