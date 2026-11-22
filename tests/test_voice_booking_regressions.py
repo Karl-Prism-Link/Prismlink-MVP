@@ -88,6 +88,49 @@ async def booking_context(client, *, slug: str):
 
 
 @pytest.mark.asyncio
+async def test_immediate_safety_state_survives_session_rehydration(client):
+    db, live, _tools = await booking_context(client, slug="safety-state-rehydration")
+    restored_db = DBSession()
+    try:
+        await live.activate_immediate_safety("immediate_emergency")
+
+        restored = LiveCallSession(
+            restored_db,
+            tenant_id=live.tenant_id,
+            external_call_id=live.external_call_id,
+            caller_number=live.caller_number,
+            called_number=live.called_number,
+        )
+        await restored.start()
+
+        assert restored.call is not None
+        assert restored.call.id == live.call.id
+        assert restored.immediate_safety_active is True
+        assert restored.voice_state.safety_reason == "immediate_emergency"
+        assert restored.voice_state.safety_response_sent is False
+
+        await restored.mark_safety_response_sent()
+        reloaded_db = DBSession()
+        try:
+            reloaded = LiveCallSession(
+                reloaded_db,
+                tenant_id=live.tenant_id,
+                external_call_id=live.external_call_id,
+                caller_number=live.caller_number,
+                called_number=live.called_number,
+            )
+            await reloaded.start()
+            assert reloaded.immediate_safety_active is True
+            assert reloaded.voice_state.safety_reason == "immediate_emergency"
+            assert reloaded.voice_state.safety_response_sent is True
+        finally:
+            await reloaded_db.close()
+    finally:
+        await restored_db.close()
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes(client):
     db, live, tools = await booking_context(client, slug="booking-time-change")
     try:
