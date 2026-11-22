@@ -20,9 +20,36 @@ _OPEN_NOW_RE = re.compile(
     re.I,
 )
 _PRICE_RE = re.compile(
-    r"\b(?:price|prices|cost|costs|how much|what(?:\s+is|\s+does)\s+(?:the\s+)?(?:price|cost)|what(?:\s+is|\s+does)\s+(?:a|the)\s+.+?\s+(?:cost|price))\b",
+    r"\b(?:"
+    r"how\s+much(?:\s+(?:is|are|for))?"
+    r"|what(?:'s|\s+is)\s+(?:(?:the|a)\s+)?(?:price|cost)(?:\s+(?:of|for))?"
+    r"|(?:price|cost)\s+(?:of|for)"
+    r"|what(?:'s|\s+is)\s+(?:a|the)\s+.+?\s+(?:cost|price)"
+    r"|what\s+does\s+.+?\s+cost"
+    r"|how\s+much\s+does\s+.+?\s+cost"
+    r")\b",
     re.I,
 )
+
+_CURRENCY_UNITS = {
+    "NZD": "dollars",
+    "AUD": "dollars",
+    "USD": "dollars",
+    "CAD": "dollars",
+    "SGD": "dollars",
+    "HKD": "dollars",
+    "FJD": "dollars",
+    "EUR": "euros",
+    "GBP": "pounds",
+    "JPY": "yen",
+    "CNY": "yuan",
+    "INR": "rupees",
+    "CHF": "francs",
+    "ZAR": "rand",
+    "AED": "dirhams",
+    "PHP": "pesos",
+    "MXN": "pesos",
+}
 
 _HOURS_RE = re.compile(
     r"\b(?:opening|business)\s+hours\b"
@@ -54,9 +81,10 @@ def price_speech(
         amount = f"{price_cents // 100:d}"
     else:
         amount = f"{price_cents / 100:.2f}"
-    # Prices are stored/configured as GST-inclusive for salon callers. Do not
-    # expose the currency code or GST detail in spoken pricing.
-    return f"The {service_name} is {amount} dollars."
+    # Speak the configured currency as a natural unit, never as an ISO code.
+    # NZD/AUD/USD/CAD remain the simple "dollars" wording used by the salon.
+    unit = _CURRENCY_UNITS.get(str(currency or "NZD").upper(), str(currency).upper())
+    return f"The {service_name} is {amount} {unit}."
 
 
 def is_business_hours_question(text: str | None) -> bool:

@@ -620,6 +620,19 @@ async def run_bot(
         async def _handle_common_enquiry(self, latest_user: str, direction: FrameDirection) -> bool:
             """Answer configured salon fact questions without an LLM round trip."""
             if is_price_question(latest_user):
+                # Treat pricing as a separate enquiry before branching on whether a
+                # configured price exists. Never leave a prepared action armed, and
+                # never record a message request until a message is actually submitted.
+                call_session.clear_prepared_booking()
+                call_session.clear_prepared_reschedule()
+                call_session.clear_prepared_cancel()
+                call_session.clear_prepared_message()
+                call_session.update_voice_state(
+                    intent="enquiry",
+                    confirmed=False,
+                    last_tool="get_salon_information",
+                    last_tool_ok=None,
+                )
                 service_name = configured_service_name_from_speech(
                     latest_user, configured_service_names
                 )
@@ -637,8 +650,8 @@ async def run_bot(
                 )
                 if service is None or service.price is None:
                     call_session.set_resolution(
-                        "message_requested",
-                        f"Price is not configured for {service_name}; caller was offered a message.",
+                        "enquiry_resolved",
+                        f"Price is not configured for {service_name}; caller was offered a message, but no message was taken.",
                     )
                     await self._speak(
                         f"I don't have a price configured for {service_name}. I can take a message for the salon if you'd like.",
@@ -649,15 +662,9 @@ async def run_bot(
                 speech = price_speech(
                     service_name,
                     service.price,
+                    currency=str(getattr(tenant, "currency", "NZD") or "NZD"),
                     prices_include_gst=bool(getattr(tenant, "prices_include_gst", True)),
                 )
-                # A price clarification is a separate enquiry. Never leave a previously
-                # prepared consequential action armed behind it: a later bare "yes" must
-                # not confirm an action the caller has not just reviewed.
-                call_session.clear_prepared_booking()
-                call_session.clear_prepared_reschedule()
-                call_session.clear_prepared_cancel()
-                call_session.clear_prepared_message()
                 call_session.update_voice_state(
                     intent="enquiry",
                     confirmed=False,

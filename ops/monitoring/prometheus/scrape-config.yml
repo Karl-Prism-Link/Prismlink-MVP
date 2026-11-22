@@ -18,3 +18,9 @@
     - targets: ["127.0.0.1:9100"]
       labels:
         host: hpmicro
+
+- job_name: aurora-node
+  static_configs:
+    - targets: ["100.105.4.49:9100"]
+      labels:
+        host: aurora
