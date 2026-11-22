@@ -13,7 +13,11 @@ from services.voice.message_routing import (
     routing_fallback_speech,
 )
 from services.voice.model_router import confirmation_fastpath_action
-from services.voice.safety import is_health_only_request, is_immediate_emergency_language
+from services.voice.safety import (
+    immediate_emergency_response,
+    is_health_only_request,
+    is_immediate_emergency_language,
+)
 from services.voice.session import LiveCallSession, VoiceConversationState
 from services.voice.speech_cleanup import (
     deterministic_post_action_social_reply,
@@ -62,6 +66,17 @@ def test_health_only_requests_are_never_routed_as_medical_advice():
     assert is_health_only_request("I need to book a haircut") is False
     assert is_immediate_emergency_language("I can't breathe") is True
     assert is_immediate_emergency_language("I cut my finger") is False
+
+
+def test_emergency_response_speaks_new_zealand_111_as_separate_digits():
+    assert (
+        immediate_emergency_response()
+        == "I can't provide medical help. Please call one, one, one now."
+    )
+    assert (
+        immediate_emergency_response(repeated=True)
+        == "Please call one, one, one now. I can't provide medical help."
+    )
 
 
 def test_message_request_and_inline_message_are_detected():

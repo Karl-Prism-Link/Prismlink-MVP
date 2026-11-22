@@ -81,7 +81,11 @@ from services.voice.runtime_control import (
     is_rate_limit_error,
     select_latest_caller_text,
 )
-from services.voice.safety import is_health_only_request, is_immediate_emergency_language
+from services.voice.safety import (
+    immediate_emergency_response,
+    is_health_only_request,
+    is_immediate_emergency_language,
+)
 from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     is_business_hours_question,
@@ -1221,9 +1225,9 @@ async def run_bot(
                 call_session.activate_immediate_safety("immediate_emergency")
 
             if call_session.immediate_safety_active:
-                response = "Please call 111 now. I can't provide medical help."
+                response = immediate_emergency_response(repeated=True)
                 if not call_session.voice_state.safety_response_sent:
-                    response = "I can't provide medical help. Please call 111 now."
+                    response = immediate_emergency_response()
                 call_session.set_resolution(
                     "out_of_scope",
                     "Immediate safety state active; ordinary salon workflows are blocked.",
