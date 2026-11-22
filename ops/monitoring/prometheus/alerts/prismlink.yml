@@ -1,32 +1,23 @@
 groups:
   - name: prism-link-availability
     rules:
-      - alert: PrismLinkTargetDown
-        expr: up{job=~"pipecat|aurora|aurora-node|hpmicro-node"} == 0
+      - alert: PrismLinkPipecatDown
+        expr: up{job="pipecat"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.job }} is unreachable"
-          runbook: "Check the systemd service, Tailscale path and host health dashboard."
+          summary: "PRISM LINK API metrics endpoint is unreachable"
+          runbook: "Check prism-link-api.service and localhost:8000/metrics."
 
-      - alert: AuroraControlApiDown
-        expr: aurora_control_api_up == 0
+      - alert: AuroraMetricsDown
+        expr: up{job="aurora"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
-          summary: "Aurora control API is not healthy"
-          runbook: "On aurora: check prismlink-sip.service and localhost:8088. Do not expose 8088 publicly."
-
-      - alert: AuroraNativeMetricsUnavailable
-        expr: aurora_native_metrics_up == 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Aurora native call/RTP metrics are unavailable"
-          runbook: "The exporter is reachable but Aurora /metrics is not. Restore the local endpoint."
+          summary: "Aurora metrics endpoint is unreachable"
+          runbook: "Check Aurora /metrics on 100.105.4.49:8088 and the Tailscale route."
 
       - alert: AuroraSipUnregistered
         expr: aurora_sip_registered == 0
@@ -35,16 +26,15 @@ groups:
           severity: critical
         annotations:
           summary: "Aurora is not registered to the SIP trunk"
-          runbook: "Check SIP credentials, registration logs, carrier reachability and firewall rules."
+          runbook: "Check SIP registration state and carrier connectivity."
 
       - alert: AuroraRtpNoFlow
         expr: increase(aurora_rtp_no_flow_total[10m]) > 0
-        for: 0m
         labels:
           severity: critical
         annotations:
-          summary: "A SIP call had no {{ $labels.direction }} RTP flow"
-          runbook: "Check RTP bind address, Azure firewall/NSG, carrier media address and port range 20000-50000."
+          summary: "Aurora detected missing RTP flow"
+          runbook: "Check RTP bind address, firewall/NSG, carrier media address and RTP port range."
 
       - alert: AuroraCallbackFailureRate
         expr: sum(rate(aurora_callback_requests_total{result=~"error|timeout"}[10m])) / clamp_min(sum(rate(aurora_callback_requests_total[10m])), 0.001) > 0.10
@@ -53,7 +43,7 @@ groups:
           severity: warning
         annotations:
           summary: "More than 10% of Aurora callbacks to Pipecat are failing"
-          runbook: "Check hpmicro prism-link-api, the Tailscale route and POST /internal/sip-events logs."
+          runbook: "Check hpmicro prism-link-api, Tailscale route and SIP event callback logs."
 
   - name: prism-link-hosts
     rules:
@@ -81,7 +71,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Pipecat caller-to-response latency p95 is above 2.5 seconds"
+          summary: "PRISM LINK caller-to-response latency p95 is above 2.5 seconds"
+
       - alert: PrismLinkApiErrorRate
         expr: sum(rate(http_requests_total{status=~"5.."}[10m])) / clamp_min(sum(rate(http_requests_total[10m])), 0.001) > 0.05
         for: 5m
@@ -89,3 +80,20 @@ groups:
           severity: warning
         annotations:
           summary: "PRISM LINK API 5xx rate is above 5%"
+
+      - alert: PrismLinkFallbackRate
+        expr: sum(rate(call_outcomes_total{outcome="fallback"}[10m])) / clamp_min(sum(rate(calls_completed_total[10m])), 0.001) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Receptionist fallback rate is above 10%"
+          runbook: "Review recent failed conversations and prompt/regression-test coverage."
+
+      - alert: PrismLinkBookingFailures
+        expr: increase(booking_failures_total[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "PRISM LINK recorded a booking failure"
+          runbook: "Inspect booking failure reason and reproduce with the booking regression suite."
