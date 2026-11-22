@@ -6,7 +6,9 @@ from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     is_business_hours_question,
     is_open_now_question,
+    is_price_question,
     open_now_speech,
+    price_speech,
 )
 
 
@@ -62,3 +64,16 @@ def test_hours_summary_uses_configured_values():
     assert "Monday 9 AM to 5 PM" in speech
     assert "Saturday 9 AM to 2 PM" in speech
     assert "Sunday closed" in speech
+
+
+def test_price_question_phrases_are_deterministic():
+    assert is_price_question("How much is the men's haircut?")
+    assert is_price_question("What does a men's cut cost?")
+    assert is_price_question("What's the price of a women's cut?")
+    assert is_price_question("How much for a men's haircut?")
+    assert not is_price_question("I'd like to book a men's haircut.")
+
+
+def test_price_speech_formats_configured_cents_without_calculation():
+    assert price_speech("Men's Cut", 4500, "NZD") == "The Men's Cut is 45 dollars NZD."
+    assert price_speech("Colour", 6575, "NZD") == "The Colour is 65.75 dollars NZD."

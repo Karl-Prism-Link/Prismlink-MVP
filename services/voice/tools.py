@@ -953,6 +953,7 @@ class VoiceToolset:
                 {
                     "name": canonical_service_name(row.name),
                     "duration_minutes": row.duration_minutes,
+                    "price": row.price,
                     "description": row.description,
                 }
                 for row in services

@@ -86,7 +86,9 @@ from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     is_business_hours_question,
     is_open_now_question,
+    is_price_question,
     open_now_speech,
+    price_speech,
 )
 from services.voice.session import LiveCallSession
 from services.voice.speech_cleanup import (
@@ -616,7 +618,59 @@ async def run_bot(
             return True
 
         async def _handle_common_enquiry(self, latest_user: str, direction: FrameDirection) -> bool:
-            """Answer configured business-hours questions without an LLM round trip."""
+            """Answer configured salon fact questions without an LLM round trip."""
+            if is_price_question(latest_user):
+                service_name = configured_service_name_from_speech(
+                    latest_user, configured_service_names
+                )
+                if service_name is None:
+                    await self._speak(
+                        "Which service would you like the price for?", direction
+                    )
+                    call_session.update_voice_state(
+                        intent="enquiry", confirmed=False, last_tool="get_salon_information"
+                    )
+                    return True
+
+                service_rows = [row for row in await tools.services.list() if row.is_active]
+                service = next(
+                    (row for row in service_rows if row.name == service_name),
+                    None,
+                )
+                if service is None or service.price is None:
+                    call_session.set_resolution(
+                        "message_requested",
+                        f"Price is not configured for {service_name}; caller was offered a message.",
+                    )
+                    await self._speak(
+                        f"I don't have a price configured for {service_name}. I can take a message for the salon if you'd like.",
+                        direction,
+                    )
+                    return True
+
+                currency = getattr(tenant, "currency", "NZD") or "NZD"
+                speech = price_speech(service_name, service.price, currency)
+                current_intent = call_session.voice_state.intent
+                if current_intent not in {"booking", "reschedule", "appointment_management"}:
+                    call_session.clear_prepared_booking()
+                    call_session.clear_prepared_reschedule()
+                    call_session.clear_prepared_cancel()
+                    call_session.clear_prepared_message()
+                    call_session.update_voice_state(
+                        intent="enquiry", confirmed=False, last_tool="get_salon_information", last_tool_ok=True
+                    )
+                else:
+                    call_session.update_voice_state(
+                        confirmed=False, last_tool="get_salon_information", last_tool_ok=True
+                    )
+                call_session.set_resolution(
+                    "enquiry_resolved",
+                    f"Answered configured salon price enquiry for {service_name}.",
+                )
+                await self._speak(speech, direction)
+                logger.info("PRISM LINK deterministic salon price fastpath service={}", service_name)
+                return True
+
             if not is_business_hours_question(latest_user):
                 return False
 

@@ -19,6 +19,11 @@ _OPEN_NOW_RE = re.compile(
     r"|\b(?:open|closed)\s+(?:right\s+)?now\b",
     re.I,
 )
+_PRICE_RE = re.compile(
+    r"\b(?:price|prices|cost|costs|how much|what(?:\s+is|\s+does)\s+(?:the\s+)?(?:price|cost)|what(?:\s+is|\s+does)\s+(?:a|the)\s+.+?\s+(?:cost|price))\b",
+    re.I,
+)
+
 _HOURS_RE = re.compile(
     r"\b(?:opening|business)\s+hours\b"
     r"|\bwhat\s+(?:are\s+)?(?:your|the)\s+hours\b"
@@ -32,6 +37,18 @@ _DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 
 def is_open_now_question(text: str | None) -> bool:
     return bool(_OPEN_NOW_RE.search(str(text or "")))
+
+
+def is_price_question(text: str | None) -> bool:
+    return bool(_PRICE_RE.search(str(text or "")))
+
+
+def price_speech(service_name: str, price_cents: int, currency: str = "NZD") -> str:
+    if price_cents % 100 == 0:
+        amount = f"{price_cents // 100:d}"
+    else:
+        amount = f"{price_cents / 100:.2f}"
+    return f"The {service_name} is {amount} dollars {currency}."
 
 
 def is_business_hours_question(text: str | None) -> bool:
