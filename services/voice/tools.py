@@ -953,7 +953,13 @@ class VoiceToolset:
                 {
                     "name": canonical_service_name(row.name),
                     "duration_minutes": row.duration_minutes,
-                    "price": row.price,
+                    "price_cents": row.price,
+                    "price": (
+                        f"{row.price / 100:.2f} {self.tenant.currency}"
+                        if row.price is not None
+                        else None
+                    ),
+                    "prices_include_gst": bool(self.tenant.prices_include_gst),
                     "description": row.description,
                 }
                 for row in services
