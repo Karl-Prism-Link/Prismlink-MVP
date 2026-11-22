@@ -1222,7 +1222,7 @@ async def run_bot(
             # Once active, it is checked before every ordinary workflow and cannot be
             # cleared by model routing, context trimming, or a later salon request.
             if is_immediate_emergency_language(latest_user):
-                call_session.activate_immediate_safety("immediate_emergency")
+                await call_session.activate_immediate_safety("immediate_emergency")
 
             if call_session.immediate_safety_active:
                 response = immediate_emergency_response(repeated=True)
@@ -1233,7 +1233,7 @@ async def run_bot(
                     "Immediate safety state active; ordinary salon workflows are blocked.",
                 )
                 await self._speak(response, direction)
-                call_session.mark_safety_response_sent()
+                await call_session.mark_safety_response_sent()
                 logger.warning(
                     "PRISM LINK immediate safety active; ordinary workflow routing blocked reason={}",
                     call_session.voice_state.safety_reason,
