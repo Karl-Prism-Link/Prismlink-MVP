@@ -49,6 +49,13 @@ class TenantOut(APIModel):
 
 
 class TenantPatch(BaseModel):
+    @field_validator("currency", "prices_include_gst", mode="before", check_fields=False)
+    @classmethod
+    def reject_null_non_nullable_fields(cls, value):
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
+
     name: str | None = Field(default=None, min_length=2, max_length=160)
     timezone: str | None = Field(default=None, max_length=64)
     phone_number: str | None = Field(default=None, max_length=32)
