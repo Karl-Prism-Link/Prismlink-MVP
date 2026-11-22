@@ -43,12 +43,20 @@ def is_price_question(text: str | None) -> bool:
     return bool(_PRICE_RE.search(str(text or "")))
 
 
-def price_speech(service_name: str, price_cents: int, currency: str = "NZD") -> str:
+def price_speech(
+    service_name: str,
+    price_cents: int,
+    currency: str = "NZD",
+    *,
+    prices_include_gst: bool = True,
+) -> str:
     if price_cents % 100 == 0:
         amount = f"{price_cents // 100:d}"
     else:
         amount = f"{price_cents / 100:.2f}"
-    return f"The {service_name} is {amount} dollars {currency}."
+    # Prices are stored/configured as GST-inclusive for salon callers. Do not
+    # expose the currency code or GST detail in spoken pricing.
+    return f"The {service_name} is {amount} dollars."
 
 
 def is_business_hours_question(text: str | None) -> bool:

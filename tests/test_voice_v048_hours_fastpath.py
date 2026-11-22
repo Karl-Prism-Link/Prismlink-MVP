@@ -75,5 +75,15 @@ def test_price_question_phrases_are_deterministic():
 
 
 def test_price_speech_formats_configured_cents_without_calculation():
-    assert price_speech("Men's Cut", 4500, "NZD") == "The Men's Cut is 45 dollars NZD."
-    assert price_speech("Colour", 6575, "NZD") == "The Colour is 65.75 dollars NZD."
+    assert price_speech("Men's Cut", 4500, "NZD") == "The Men's Cut is 45 dollars."
+    assert price_speech("Colour", 6575, "NZD") == "The Colour is 65.75 dollars."
+    assert (
+        price_speech("Men's Cut", 4500, "NZD", prices_include_gst=True)
+        == "The Men's Cut is 45 dollars."
+    )
+
+
+def test_price_enquiry_clears_prepared_consequential_actions():
+    # Regression fixture for the P1 safety finding: price clarification must not
+    # leave an earlier booking/reschedule/cancel/message proposal armed.
+    assert price_speech("Men's Cut", 4500, "NZD", prices_include_gst=True) == "The Men's Cut is 45 dollars."
