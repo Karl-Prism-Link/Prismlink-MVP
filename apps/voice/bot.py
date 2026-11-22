@@ -112,11 +112,11 @@ from services.voice.tools import VoiceToolset
 
 settings = get_settings()
 
-# One API process hosts concurrent Pipecat calls. Groq Developer Plan currently
-# allows 250,000 TPM per model; reserve only 200,000 to retain 20% headroom.
+# The configured Groq gpt-oss-20b/120b models have a documented 8,000 TPM
+# base limit. Reserve 7,000 TPM per model to leave headroom for estimation error.
 # The rolling reservation is shared across calls and tracked independently per model.
 _groq_token_budget = RollingModelTokenBudget(
-    tokens_per_minute=200_000,
+    tokens_per_minute=7_000,
     window_seconds=60.0,
     max_wait_seconds=1.5,
 )
