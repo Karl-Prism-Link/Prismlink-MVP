@@ -26,7 +26,8 @@ def test_price_speech_includes_gst_status_without_recalculating_price():
     )
 
 
-def test_voice_price_tool_result_exposes_human_units_and_gst(client):
+@pytest.mark.asyncio
+async def test_voice_price_tool_result_exposes_human_units_and_gst(client):
     from database.repositories import TenantRepository
     from database.session import DBSession
     from services.voice.session import LiveCallSession
@@ -56,7 +57,7 @@ def test_voice_price_tool_result_exposes_human_units_and_gst(client):
 
     db = DBSession()
     try:
-        tenant = __import__("asyncio").run(TenantRepository(db).by_slug("price-tool-salon"))
+        tenant = await TenantRepository(db).by_slug("price-tool-salon")
         assert tenant is not None
         live = LiveCallSession(
             db,
@@ -66,10 +67,10 @@ def test_voice_price_tool_result_exposes_human_units_and_gst(client):
             called_number=tenant.phone_number,
         )
         tools = VoiceToolset(db, tenant, live)
-        result = __import__("asyncio").run(tools.get_salon_information("How much is a men's cut?"))
+        result = await tools.get_salon_information("How much is a men's cut?")
         item = next(row for row in result["services"] if row["name"] == "Men's Cut")
         assert item["price_cents"] == 4500
         assert item["price"] == "45.00 NZD"
         assert item["prices_include_gst"] is True
     finally:
-        __import__("asyncio").run(db.close())
+        await db.close()
