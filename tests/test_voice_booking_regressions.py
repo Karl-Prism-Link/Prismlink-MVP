@@ -109,6 +109,10 @@ async def test_immediate_safety_state_survives_session_rehydration(client):
         assert restored.voice_state.safety_reason == "immediate_emergency"
         assert restored.voice_state.safety_response_sent is False
 
+        await restored.append_transcript("caller", "The emergency remains active")
+        assert restored._sequence == 2
+        assert restored.latest_caller_transcript == "The emergency remains active"
+
         await restored.mark_safety_response_sent()
         reloaded_db = DBSession()
         try:
