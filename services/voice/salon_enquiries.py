@@ -70,6 +70,24 @@ def is_price_question(text: str | None) -> bool:
     return bool(_PRICE_RE.search(str(text or "")))
 
 
+def is_price_service_clarification(
+    latest_user: str | None,
+    recent_caller_transcripts: Iterable[str],
+    *,
+    intent: str | None,
+    last_tool: str | None,
+) -> bool:
+    """Recognise the immediate service-name reply to a price clarification."""
+    recent = tuple(recent_caller_transcripts)
+    return bool(
+        str(latest_user or "").strip()
+        and intent == "enquiry"
+        and last_tool == "get_salon_information"
+        and len(recent) >= 2
+        and is_price_question(recent[-2])
+    )
+
+
 def price_speech(
     service_name: str,
     price_cents: int,

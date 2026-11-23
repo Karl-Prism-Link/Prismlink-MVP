@@ -7,6 +7,7 @@ from services.voice.salon_enquiries import (
     is_business_hours_question,
     is_open_now_question,
     is_price_question,
+    is_price_service_clarification,
     open_now_speech,
     price_speech,
 )
@@ -116,3 +117,42 @@ def test_deterministic_price_path_passes_tenant_currency_to_speech():
     start = source.index("speech = price_speech(")
     price_call = source[start : start + 500]
     assert 'currency=str(getattr(tenant, "currency", "NZD") or "NZD")' in price_call
+
+
+def test_price_service_clarification_stays_in_the_enquiry_flow():
+    recent = ("How much does it cost?", "Women's Cut")
+    assert is_price_service_clarification(
+        "Women's Cut",
+        recent,
+        intent="enquiry",
+        last_tool="get_salon_information",
+    )
+    assert not is_price_service_clarification(
+        "Women's Cut",
+        ("Can I book an appointment?", "Women's Cut"),
+        intent="enquiry",
+        last_tool="get_salon_information",
+    )
+    assert not is_price_service_clarification(
+        "Women's Cut",
+        recent,
+        intent="booking",
+        last_tool="get_salon_information",
+    )
+    assert not is_price_service_clarification(
+        "Women's Cut",
+        recent,
+        intent="enquiry",
+        last_tool="book_appointment",
+    )
+
+
+def test_common_enquiry_resolves_price_clarification_before_booking_fastpath():
+    from pathlib import Path
+
+    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    start = source.index("async def _handle_common_enquiry")
+    end = source.index("async def _handle_routing_and_message", start)
+    enquiry_handler = source[start:end]
+    assert "is_price_service_clarification(" in enquiry_handler
+    assert "if is_price_question(latest_user) or price_service_clarification:" in enquiry_handler

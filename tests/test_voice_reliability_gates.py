@@ -15,6 +15,17 @@ def test_tenant_patch_rejects_explicit_null_for_currency_and_gst():
         TenantPatch(prices_include_gst=None)
 
 
+def test_tenant_patch_accepts_and_normalises_iso_currency_codes():
+    assert TenantPatch(currency="nzd").currency == "NZD"
+    assert TenantPatch(currency="EUR").currency == "EUR"
+
+
+@pytest.mark.parametrize("currency", ["123", "ZZZ", "NZ", "NZDD", ""])
+def test_tenant_patch_rejects_invalid_currency_codes(currency):
+    with pytest.raises(ValidationError):
+        TenantPatch(currency=currency)
+
+
 def test_price_speech_uses_simple_dollar_wording():
     assert (
         price_speech("Men's Cut", 4500, "NZD", prices_include_gst=True)

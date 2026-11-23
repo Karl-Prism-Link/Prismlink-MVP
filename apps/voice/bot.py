@@ -92,6 +92,7 @@ from services.voice.salon_enquiries import (
     is_business_hours_question,
     is_open_now_question,
     is_price_question,
+    is_price_service_clarification,
     open_now_speech,
     price_speech,
 )
@@ -671,7 +672,21 @@ async def run_bot(
 
         async def _handle_common_enquiry(self, latest_user: str, direction: FrameDirection) -> bool:
             """Answer configured salon fact questions without an LLM round trip."""
-            if is_price_question(latest_user):
+            state = call_session.voice_state
+            recent = call_session.recent_caller_transcripts
+            service_reply = configured_service_name_from_speech(
+                latest_user, configured_service_names
+            )
+            price_service_clarification = bool(
+                service_reply
+                and is_price_service_clarification(
+                    latest_user,
+                    recent,
+                    intent=state.intent,
+                    last_tool=state.last_tool,
+                )
+            )
+            if is_price_question(latest_user) or price_service_clarification:
                 # Treat pricing as a separate enquiry before branching on whether a
                 # configured price exists. Never leave a prepared action armed, and
                 # never record a message request until a message is actually submitted.
@@ -685,9 +700,7 @@ async def run_bot(
                     last_tool="get_salon_information",
                     last_tool_ok=None,
                 )
-                service_name = configured_service_name_from_speech(
-                    latest_user, configured_service_names
-                )
+                service_name = service_reply
                 if service_name is None:
                     await self._speak("Which service would you like the price for?", direction)
                     call_session.update_voice_state(
