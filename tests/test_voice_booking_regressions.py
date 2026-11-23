@@ -88,6 +88,53 @@ async def booking_context(client, *, slug: str):
 
 
 @pytest.mark.asyncio
+async def test_immediate_safety_state_survives_session_rehydration(client):
+    db, live, _tools = await booking_context(client, slug="safety-state-rehydration")
+    restored_db = DBSession()
+    try:
+        await live.activate_immediate_safety("immediate_emergency")
+
+        restored = LiveCallSession(
+            restored_db,
+            tenant_id=live.tenant_id,
+            external_call_id=live.external_call_id,
+            caller_number=live.caller_number,
+            called_number=live.called_number,
+        )
+        await restored.start()
+
+        assert restored.call is not None
+        assert restored.call.id == live.call.id
+        assert restored.immediate_safety_active is True
+        assert restored.voice_state.safety_reason == "immediate_emergency"
+        assert restored.voice_state.safety_response_sent is False
+
+        await restored.append_transcript("caller", "The emergency remains active")
+        assert restored._sequence == 2
+        assert restored.latest_caller_transcript == "The emergency remains active"
+
+        await restored.mark_safety_response_sent()
+        reloaded_db = DBSession()
+        try:
+            reloaded = LiveCallSession(
+                reloaded_db,
+                tenant_id=live.tenant_id,
+                external_call_id=live.external_call_id,
+                caller_number=live.caller_number,
+                called_number=live.called_number,
+            )
+            await reloaded.start()
+            assert reloaded.immediate_safety_active is True
+            assert reloaded.voice_state.safety_reason == "immediate_emergency"
+            assert reloaded.voice_state.safety_response_sent is True
+        finally:
+            await reloaded_db.close()
+    finally:
+        await restored_db.close()
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_booking_time_change_replaces_prepared_slot_and_requires_fresh_yes(client):
     db, live, tools = await booking_context(client, slug="booking-time-change")
     try:
@@ -246,6 +293,7 @@ async def test_booking_confirmation_without_fresh_explicit_yes_is_rejected(clien
     finally:
         await db.close()
 
+
 @pytest.mark.asyncio
 async def test_same_day_weekday_bare_time_rolls_to_next_week_when_opening_time_has_passed(
     client, monkeypatch
@@ -254,12 +302,11 @@ async def test_same_day_weekday_bare_time_rolls_to_next_week_when_opening_time_h
 
     db, live, tools = await booking_context(client, slug="booking-same-day-past-bare-time")
     try:
+
         class FrozenDateTime(RealDateTime):
             @classmethod
             def now(cls, tz=None):
-                fixed = RealDateTime(
-                    2026, 11, 20, 15, 37, tzinfo=ZoneInfo("Pacific/Auckland")
-                )
+                fixed = RealDateTime(2026, 11, 20, 15, 37, tzinfo=ZoneInfo("Pacific/Auckland"))
                 return fixed if tz is None else fixed.astimezone(tz)
 
         monkeypatch.setattr("services.voice.tools.datetime", FrozenDateTime)
@@ -268,9 +315,7 @@ async def test_same_day_weekday_bare_time_rolls_to_next_week_when_opening_time_h
             return True, starts_at + timedelta(minutes=45)
 
         monkeypatch.setattr(tools.booking, "availability", free_calendar)
-        result = await tools.check_availability(
-            "Haircut", "", caller_time_phrase="Friday 10:00"
-        )
+        result = await tools.check_availability("Haircut", "", caller_time_phrase="Friday 10:00")
 
         assert result["ok"] is True
         assert result["available"] is True
@@ -287,6 +332,7 @@ async def test_find_available_times_returns_only_calendar_confirmed_slots(client
 
     db, live, tools = await booking_context(client, slug="booking-available-times")
     try:
+
         class FrozenDateTime(RealDateTime):
             @classmethod
             def now(cls, tz=None):
@@ -307,7 +353,9 @@ async def test_find_available_times_returns_only_calendar_confirmed_slots(client
         assert result["ok"] is True
         assert result["local_date"] == "2026-11-27"
         assert [slot["spoken_start"].split(" at ")[-1] for slot in result["slots"]] == [
-            "9:30 AM", "10:00 AM", "10:30 AM"
+            "9:30 AM",
+            "10:00 AM",
+            "10:30 AM",
         ]
         assert checked[:4] == ["09:00", "09:30", "10:00", "10:30"]
 

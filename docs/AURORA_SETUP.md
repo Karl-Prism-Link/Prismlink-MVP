@@ -8,7 +8,7 @@ isolated Pipecat pipeline.
 
 ## Requirements
 
-- Aurora must be registered to 2talk and send `call.ringing` events to
+- Aurora must be registered to Hero and send `call.ringing` events to
   `http://127.0.0.1:8000/internal/sip-events`.
 - The PRISM LINK API process must include the `voice` extra and run on the same
   host as Aurora.
@@ -70,7 +70,7 @@ browser-authenticated dashboard call.
 ## Validation
 
 After adding the environment values, restart the PRISM LINK API process, then
-call the 2talk pilot number. Expected results:
+call the Hero pilot number. Expected results:
 
 - Aurora logs a `call.ringing` event and then `200 OK sent` after Pipecat starts.
 - PRISM LINK logs an Aurora call start and the usual live voice pipeline logs.

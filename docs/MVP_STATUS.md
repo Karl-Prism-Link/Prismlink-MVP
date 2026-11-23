@@ -43,7 +43,7 @@ are reliably released.
 
 ## Aurora integration exit criteria
 
-- A real inbound test call reaches the PRISM LINK API through Aurora and the 2talk trunk.
+- A real inbound test call reaches the PRISM LINK API through Aurora and the Hero SIP trunk.
 - Aurora event payloads satisfy API validation and call IDs map consistently to the call lifecycle.
 - Incoming speech is intelligible and outgoing audio is audible using supported PCMA/PCMU RTP.
 - Called-number routing selects the correct salon; unknown numbers fail closed.

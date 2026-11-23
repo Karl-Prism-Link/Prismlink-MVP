@@ -36,7 +36,7 @@ from pipecat.services.llm_service import FunctionCallParams
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from apps.voice.prompt import build_voice_system_prompt
+from apps.voice.prompt import build_voice_greeting, build_voice_system_prompt
 from core.config import get_settings
 from database.repositories import TenantRepository
 from database.session import DBSession
@@ -75,18 +75,26 @@ from services.voice.model_router import (
     route_voice_turn,
 )
 from services.voice.runtime_control import (
+    STATE_MARKER,
     RollingModelTokenBudget,
     compact_context_messages,
     is_generic_booking_request,
     is_rate_limit_error,
     select_latest_caller_text,
 )
-from services.voice.safety import is_health_only_request, is_immediate_emergency_language
+from services.voice.safety import (
+    immediate_emergency_response,
+    is_health_only_request,
+    is_immediate_emergency_language,
+)
 from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     is_business_hours_question,
     is_open_now_question,
+    is_price_question,
+    is_price_service_clarification,
     open_now_speech,
+    price_speech,
 )
 from services.voice.session import LiveCallSession
 from services.voice.speech_cleanup import (
@@ -95,6 +103,7 @@ from services.voice.speech_cleanup import (
     cancellation_success_speech,
     deterministic_post_action_social_reply,
     is_farewell_utterance,
+    is_post_booking_confirmation_request,
     is_spoken_question,
     limit_spoken_questions,
     mutation_failure_speech,
@@ -106,10 +115,11 @@ from services.voice.tools import VoiceToolset
 
 settings = get_settings()
 
-# One API process hosts concurrent Pipecat calls. Share the budget across those
-# calls, independently for each Groq model, and keep 1,000 TPM below Groq's 8,000 cap.
+# Default Groq gpt-oss-20b/120b base quota is 8,000 TPM. Keep a conservative
+# 7,000 TPM default, configurable for the actual organisation/model quota.
+# The rolling reservation is shared across calls and tracked independently per model.
 _groq_token_budget = RollingModelTokenBudget(
-    tokens_per_minute=7000,
+    tokens_per_minute=settings.groq_tokens_per_minute,
     window_seconds=60.0,
     max_wait_seconds=1.5,
 )
@@ -265,15 +275,61 @@ async def run_bot(
             """Groq service with per-model TPM admission control for live voice."""
 
             async def get_chat_completions(self, context):
-                adapter = self.get_llm_adapter()
-                invocation_params = adapter.get_llm_invocation_params(
-                    context,
-                    system_instruction=self._settings.system_instruction,
-                    convert_developer_to_user=not self.supports_developer_role,
-                )
+                def request_params():
+                    adapter = self.get_llm_adapter()
+                    return adapter.get_llm_invocation_params(
+                        context,
+                        system_instruction=self._settings.system_instruction,
+                        convert_developer_to_user=not self.supports_developer_role,
+                    )
+
+                invocation_params = await request_params()
                 params = self.build_chat_completion_params(invocation_params)
                 model = str(params.get("model") or self._settings.model)
                 estimate = _groq_token_budget.estimate_request_tokens(params)
+                original_estimate = estimate
+                trimmed_turns = 0
+
+                # Keep the current caller turn and the compact persistent voice state,
+                # but discard older dialogue when it would push a single request over
+                # the model's TPM ceiling. This is safer than sending an oversized
+                # request or repeatedly telling the caller the connection failed.
+                while estimate > _groq_token_budget.tokens_per_minute:
+                    messages = context.get_messages()
+                    user_turns = sum(message.get("role") == "user" for message in messages)
+                    if user_turns <= 1:
+                        break
+                    state_message = next(
+                        (
+                            str(message.get("content") or "")[len(STATE_MARKER) :].strip()
+                            for message in messages
+                            if message.get("role") == "developer"
+                            and str(message.get("content") or "").startswith(STATE_MARKER)
+                        ),
+                        None,
+                    )
+                    context.set_messages(
+                        compact_context_messages(
+                            messages,
+                            max_user_turns=user_turns - 1,
+                            state_summary=state_message,
+                        )
+                    )
+                    trimmed_turns += 1
+                    invocation_params = await request_params()
+                    params = self.build_chat_completion_params(invocation_params)
+                    params["model"] = model
+                    estimate = _groq_token_budget.estimate_request_tokens(params)
+
+                if trimmed_turns:
+                    logger.warning(
+                        "PRISM LINK Groq request context trimmed model={} turns_removed={} "
+                        "estimated_tokens_before={} estimated_tokens_after={}",
+                        model,
+                        trimmed_turns,
+                        original_estimate,
+                        estimate,
+                    )
                 wait_seconds = await _groq_token_budget.reserve(model, estimate)
                 logger.info(
                     "PRISM LINK Groq TPM admission model={} estimated_tokens={} wait_ms={}",
@@ -615,7 +671,81 @@ async def run_bot(
             return True
 
         async def _handle_common_enquiry(self, latest_user: str, direction: FrameDirection) -> bool:
-            """Answer configured business-hours questions without an LLM round trip."""
+            """Answer configured salon fact questions without an LLM round trip."""
+            state = call_session.voice_state
+            recent = call_session.recent_caller_transcripts
+            service_reply = configured_service_name_from_speech(
+                latest_user, configured_service_names
+            )
+            price_service_clarification = bool(
+                service_reply
+                and is_price_service_clarification(
+                    latest_user,
+                    recent,
+                    intent=state.intent,
+                    last_tool=state.last_tool,
+                )
+            )
+            if is_price_question(latest_user) or price_service_clarification:
+                # Treat pricing as a separate enquiry before branching on whether a
+                # configured price exists. Never leave a prepared action armed, and
+                # never record a message request until a message is actually submitted.
+                call_session.clear_prepared_booking()
+                call_session.clear_prepared_reschedule()
+                call_session.clear_prepared_cancel()
+                call_session.clear_prepared_message()
+                call_session.update_voice_state(
+                    intent="enquiry",
+                    confirmed=False,
+                    last_tool="get_salon_information",
+                    last_tool_ok=None,
+                )
+                service_name = service_reply
+                if service_name is None:
+                    await self._speak("Which service would you like the price for?", direction)
+                    call_session.update_voice_state(
+                        intent="enquiry", confirmed=False, last_tool="get_salon_information"
+                    )
+                    return True
+
+                service_rows = [row for row in await tools.services.list() if row.is_active]
+                service = next(
+                    (row for row in service_rows if row.name == service_name),
+                    None,
+                )
+                if service is None or service.price is None:
+                    call_session.set_resolution(
+                        "enquiry_resolved",
+                        f"Price is not configured for {service_name}; caller was offered a message, but no message was taken.",
+                    )
+                    await self._speak(
+                        f"I don't have a price configured for {service_name}. I can take a message for the salon if you'd like.",
+                        direction,
+                    )
+                    return True
+
+                speech = price_speech(
+                    service_name,
+                    service.price,
+                    currency=str(getattr(tenant, "currency", "NZD") or "NZD"),
+                    prices_include_gst=bool(getattr(tenant, "prices_include_gst", True)),
+                )
+                call_session.update_voice_state(
+                    intent="enquiry",
+                    confirmed=False,
+                    last_tool="get_salon_information",
+                    last_tool_ok=True,
+                )
+                call_session.set_resolution(
+                    "enquiry_resolved",
+                    f"Answered configured salon price enquiry for {service_name}.",
+                )
+                await self._speak(speech, direction)
+                logger.info(
+                    "PRISM LINK deterministic salon price fastpath service={}", service_name
+                )
+                return True
+
             if not is_business_hours_question(latest_user):
                 return False
 
@@ -944,22 +1074,47 @@ async def run_bot(
 
             if state.intent != "booking" or not state.service:
                 return False
-            if re.search(r"\b(what\s+times?|which\s+times?|availability|available\s+times?)\b", latest_user, re.I):
-                day = extract_booking_day_reference(latest_user) or extract_booking_day_reference(state.caller_time_phrase or "")
+            if re.search(
+                r"\b(what\s+times?|which\s+times?|availability|available\s+times?)\b",
+                latest_user,
+                re.I,
+            ):
+                day = extract_booking_day_reference(latest_user) or extract_booking_day_reference(
+                    state.caller_time_phrase or ""
+                )
                 if not day:
                     await self._speak("Which day would you like me to check?", direction)
                     return True
                 day_phrase = state.caller_time_phrase or day
-                result = await tools.find_available_times(str(state.service), day_phrase, state.staff)
+                result = await tools.find_available_times(
+                    str(state.service), day_phrase, state.staff
+                )
                 slots = result.get("slots") or []
                 if result.get("ok") is True and slots:
-                    options = [str(slot.get("spoken_start")) for slot in slots if slot.get("spoken_start")]
-                    call_session.update_voice_state(caller_time_phrase=day, starts_at=None, confirmed=False, last_tool="find_available_times", last_tool_ok=True)
-                    await self._speak(f"I have {', '.join(options)} available on {result.get('day', day)}. Which would you prefer?", direction)
+                    options = [
+                        str(slot.get("spoken_start")) for slot in slots if slot.get("spoken_start")
+                    ]
+                    call_session.update_voice_state(
+                        caller_time_phrase=day,
+                        starts_at=None,
+                        confirmed=False,
+                        last_tool="find_available_times",
+                        last_tool_ok=True,
+                    )
+                    await self._speak(
+                        f"I have {', '.join(options)} available on {result.get('day', day)}. Which would you prefer?",
+                        direction,
+                    )
                 elif result.get("ok") is True:
-                    await self._speak(f"I'm sorry, I don't have any available appointments on {result.get('day', day)}. Would another day suit you?", direction)
+                    await self._speak(
+                        f"I'm sorry, I don't have any available appointments on {result.get('day', day)}. Would another day suit you?",
+                        direction,
+                    )
                 else:
-                    await self._speak("I couldn't check the available times just now. Would you like me to try another day?", direction)
+                    await self._speak(
+                        "I couldn't check the available times just now. Would you like me to try another day?",
+                        direction,
+                    )
                 return True
             # Once the service is authoritative, date/time caller words can be checked
             # directly. This removes an unnecessary reasoning-model round trip and keeps
@@ -1124,6 +1279,28 @@ async def run_bot(
             if latest_user and latest_user not in call_session.recent_caller_transcripts:
                 await call_session.append_transcript("caller", latest_user)
 
+            # Immediate safety is a persistent runtime state, not an LLM/context hint.
+            # Once active, it is checked before every ordinary workflow and cannot be
+            # cleared by model routing, context trimming, or a later salon request.
+            if is_immediate_emergency_language(latest_user):
+                await call_session.activate_immediate_safety("immediate_emergency")
+
+            if call_session.immediate_safety_active:
+                response = immediate_emergency_response(repeated=True)
+                if not call_session.voice_state.safety_response_sent:
+                    response = immediate_emergency_response()
+                call_session.set_resolution(
+                    "out_of_scope",
+                    "Immediate safety state active; ordinary salon workflows are blocked.",
+                )
+                await self._speak(response, direction)
+                await call_session.mark_safety_response_sent()
+                logger.warning(
+                    "PRISM LINK immediate safety active; ordinary workflow routing blocked reason={}",
+                    call_session.voice_state.safety_reason,
+                )
+                return
+
             farewell = is_farewell_utterance(latest_user)
             if call_session.closing_acknowledged:
                 if farewell:
@@ -1142,6 +1319,15 @@ async def run_bot(
                     "take_message",
                 }
             )
+            if (
+                post_action_complete
+                and call_session.voice_state.last_tool == "book_appointment"
+                and is_post_booking_confirmation_request(latest_user)
+            ):
+                await self._speak("Yes, your appointment is booked. You're all set.", direction)
+                logger.info("PRISM LINK deterministic post-booking confirmation fastpath")
+                return
+
             if social_reply and (post_action_complete or farewell):
                 await self._speak(social_reply, direction)
                 call_session.set_closing_acknowledged(True)
@@ -1149,14 +1335,11 @@ async def run_bot(
                 return
 
             if is_health_only_request(latest_user):
-                if is_immediate_emergency_language(latest_user):
-                    response = "I can't provide medical help. Please call 111 now."
-                else:
-                    response = (
-                        "I'm sorry that happened. I can't provide medical advice. "
-                        "If you need medical help, please contact a healthcare professional. "
-                        "Is there anything salon-related I can help with?"
-                    )
+                response = (
+                    "I'm sorry that happened. I can't provide medical advice. "
+                    "If you need medical help, please contact a healthcare professional. "
+                    "Is there anything salon-related I can help with?"
+                )
                 call_session.set_resolution(
                     "out_of_scope",
                     "Caller raised a health-related request; the receptionist declined medical guidance.",
@@ -1822,8 +2005,9 @@ async def run_bot(
     async def on_client_connected(_transport, _client):
         logger.info("PRISM LINK voice client connected for tenant {}", tenant.slug)
         await call_session.start()
-        await call_session.append_transcript("assistant", tenant.greeting)
-        await worker.queue_frames([TTSSpeakFrame(text=tenant.greeting, append_to_context=True)])
+        greeting = build_voice_greeting(tenant)
+        await call_session.append_transcript("assistant", greeting)
+        await worker.queue_frames([TTSSpeakFrame(text=greeting, append_to_context=True)])
 
     @user_aggregator.event_handler("on_user_turn_stopped")
     async def on_user_turn_stopped(_aggregator, _strategy, message: UserTurnStoppedMessage):

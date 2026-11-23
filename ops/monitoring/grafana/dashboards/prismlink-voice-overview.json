@@ -84,7 +84,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(up{job=~\"pipecat|aurora|aurora-node|hpmicro-node\"})",
+          "expr": "sum(up{job=~\"pipecat|aurora|hpmicro-node\"})",
           "legendFormat": "up"
         }
       ],
@@ -115,7 +115,7 @@
               },
               {
                 "color": "green",
-                "value": 4
+                "value": 3
               }
             ]
           }

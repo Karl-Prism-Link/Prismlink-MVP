@@ -68,8 +68,8 @@ class RollingModelTokenBudget:
         tokens = max(1, int(estimated_tokens))
         if tokens > self.tokens_per_minute:
             raise ModelCapacityExceeded(
-                f"429 rate_limit_exceeded: estimated request {tokens} exceeds local "
-                f"{self.tokens_per_minute} TPM safety budget for {model}"
+                f"local_tpm_budget_exceeded: estimated request {tokens} exceeds "
+                f"the {self.tokens_per_minute} TPM admission budget for {model}"
             )
         started = time.monotonic()
         deadline = started + self.max_wait_seconds
@@ -87,14 +87,19 @@ class RollingModelTokenBudget:
             remaining = deadline - time.monotonic()
             if remaining <= 0 or wait_for_capacity > remaining:
                 raise ModelCapacityExceeded(
-                    f"429 rate_limit_exceeded: local {model} token budget is temporarily exhausted"
+                    f"local_tpm_budget_exceeded: {model} token admission budget is temporarily exhausted"
                 )
             await asyncio.sleep(min(wait_for_capacity, remaining))
 
 
 def is_rate_limit_error(error_text: str) -> bool:
     text = (error_text or "").lower()
-    return "429" in text or "rate limit" in text or "rate_limit_exceeded" in text
+    return (
+        "429" in text
+        or "rate limit" in text
+        or "rate_limit_exceeded" in text
+        or "local_tpm_budget_exceeded" in text
+    )
 
 
 def is_generic_booking_request(text: str) -> bool:

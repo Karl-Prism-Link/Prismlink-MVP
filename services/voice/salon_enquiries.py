@@ -19,6 +19,38 @@ _OPEN_NOW_RE = re.compile(
     r"|\b(?:open|closed)\s+(?:right\s+)?now\b",
     re.I,
 )
+_PRICE_RE = re.compile(
+    r"\b(?:"
+    r"how\s+much(?:\s+(?:is|are|for))?"
+    r"|what(?:'s|\s+is)\s+(?:(?:the|a)\s+)?(?:price|cost)(?:\s+(?:of|for))?"
+    r"|(?:price|cost)\s+(?:of|for)"
+    r"|what(?:'s|\s+is)\s+(?:a|the)\s+.+?\s+(?:cost|price)"
+    r"|what\s+does\s+.+?\s+cost"
+    r"|how\s+much\s+does\s+.+?\s+cost"
+    r")\b",
+    re.I,
+)
+
+_CURRENCY_UNITS = {
+    "NZD": "dollars",
+    "AUD": "dollars",
+    "USD": "dollars",
+    "CAD": "dollars",
+    "SGD": "dollars",
+    "HKD": "dollars",
+    "FJD": "dollars",
+    "EUR": "euros",
+    "GBP": "pounds",
+    "JPY": "yen",
+    "CNY": "yuan",
+    "INR": "rupees",
+    "CHF": "francs",
+    "ZAR": "rand",
+    "AED": "dirhams",
+    "PHP": "pesos",
+    "MXN": "pesos",
+}
+
 _HOURS_RE = re.compile(
     r"\b(?:opening|business)\s+hours\b"
     r"|\bwhat\s+(?:are\s+)?(?:your|the)\s+hours\b"
@@ -32,6 +64,45 @@ _DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 
 def is_open_now_question(text: str | None) -> bool:
     return bool(_OPEN_NOW_RE.search(str(text or "")))
+
+
+def is_price_question(text: str | None) -> bool:
+    return bool(_PRICE_RE.search(str(text or "")))
+
+
+def is_price_service_clarification(
+    latest_user: str | None,
+    recent_caller_transcripts: Iterable[str],
+    *,
+    intent: str | None,
+    last_tool: str | None,
+) -> bool:
+    """Recognise the immediate service-name reply to a price clarification."""
+    recent = tuple(recent_caller_transcripts)
+    return bool(
+        str(latest_user or "").strip()
+        and intent == "enquiry"
+        and last_tool == "get_salon_information"
+        and len(recent) >= 2
+        and is_price_question(recent[-2])
+    )
+
+
+def price_speech(
+    service_name: str,
+    price_cents: int,
+    currency: str = "NZD",
+    *,
+    prices_include_gst: bool = True,
+) -> str:
+    if price_cents % 100 == 0:
+        amount = f"{price_cents // 100:d}"
+    else:
+        amount = f"{price_cents / 100:.2f}"
+    # Speak the configured currency as a natural unit, never as an ISO code.
+    # NZD/AUD/USD/CAD remain the simple "dollars" wording used by the salon.
+    unit = _CURRENCY_UNITS.get(str(currency or "NZD").upper(), str(currency).upper())
+    return f"The {service_name} is {amount} {unit}."
 
 
 def is_business_hours_question(text: str | None) -> bool:

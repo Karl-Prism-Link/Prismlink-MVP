@@ -25,12 +25,12 @@ dependencies = [
 
 [project.optional-dependencies]
 voice = [
-  "pipecat-ai[deepgram,groq,openrouter,runner,silero,webrtc,websocket]>=1.0,<2",
+  "pipecat-ai[deepgram,groq,openrouter,runner,silero,webrtc,websocket]>=1.13,<2",
   "websockets>=17.1",
   "python-dotenv>=1.0,<2"
 ]
 dev = [
-  "pipecat-ai[deepgram,groq,openrouter,runner,silero,webrtc,websocket]>=1.0,<2",
+  "pipecat-ai[deepgram,groq,openrouter,runner,silero,webrtc,websocket]>=1.13,<2",
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.1,<2",
   "ruff>=0.12,<1"

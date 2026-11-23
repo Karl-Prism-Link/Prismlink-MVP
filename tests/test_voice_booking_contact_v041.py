@@ -1,6 +1,11 @@
+import pytest
+
 from services.voice.contact import extract_booking_name_candidate, extract_spelled_name
 from services.voice.session import LiveCallSession, VoiceConversationState
-from services.voice.speech_cleanup import booking_confirmation_speech
+from services.voice.speech_cleanup import (
+    booking_confirmation_speech,
+    is_post_booking_confirmation_request,
+)
 
 
 def _bare_session() -> LiveCallSession:
@@ -60,3 +65,22 @@ def test_v042_booking_name_correction_bypasses_llm_and_reprepares():
     assert "call_session.has_prepared_booking" in source
     assert "extract_booking_name_candidate(latest_user)" in source
     assert "_handle_booking_partial_capture" in source
+
+
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        "I just booked that appointment, please.",
+        "I've booked the appointment.",
+        "Did you book it?",
+        "Is my appointment booked?",
+        "I booked that appointment.",
+    ],
+)
+def test_post_booking_confirmation_requests_are_recognised(utterance):
+    assert is_post_booking_confirmation_request(utterance) is True
+
+
+def test_unrelated_post_booking_utterance_is_not_misclassified():
+    assert is_post_booking_confirmation_request("One bite") is False
+    assert is_post_booking_confirmation_request("Can I change the appointment?") is False

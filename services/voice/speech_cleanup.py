@@ -92,6 +92,22 @@ def is_farewell_utterance(text: str | None) -> bool:
     return bool(re.search(r"\b(bye|goodbye|see you|talk to you later)\b", value))
 
 
+def is_post_booking_confirmation_request(text: str | None) -> bool:
+    """Recognise callers checking that a just-completed booking was saved."""
+    value = re.sub(r"[^a-z0-9]+", " ", str(text or "").casefold()).strip()
+    if not value:
+        return False
+    patterns = (
+        r"\bi just (?:booked|made) (?:that|the) appointment\b",
+        r"\bi (?:have|ve) booked (?:that|the) appointment\b",
+        r"\b(?:did you|have you) book (?:it|that|the appointment)\b",
+        r"\b(?:has it|is it|was it) (?:just )?booked\b",
+        r"\b(?:is|was) (?:that|my) appointment booked\b",
+        r"\bi booked (?:that|the) appointment\b",
+    )
+    return any(re.search(pattern, value) for pattern in patterns)
+
+
 def deterministic_post_action_social_reply(text: str | None) -> str | None:
     """Return a no-LLM closing reply for common post-action social turns."""
     value = re.sub(r"[^a-z]+", " ", str(text or "").casefold()).strip()

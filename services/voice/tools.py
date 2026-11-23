@@ -51,6 +51,17 @@ class VoiceToolset:
         except ZoneInfoNotFoundError:
             self.tz = ZoneInfo("Pacific/Auckland")
 
+    def _safety_blocked(self) -> dict | None:
+        """Fail closed at the tool boundary while immediate safety is active."""
+        if not self.call_session.immediate_safety_active:
+            return None
+        return {
+            "ok": False,
+            "code": "IMMEDIATE_SAFETY_ACTIVE",
+            "safety_active": True,
+            "message": "Immediate safety is active. Ordinary salon workflows are blocked.",
+        }
+
     @staticmethod
     def _normalise(value: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
@@ -236,11 +247,12 @@ class VoiceToolset:
             value = value.replace(tzinfo=UTC)
         local = value.astimezone(self.tz)
         hour12 = local.strftime("%I").lstrip("0") or "12"
+        year_suffix = f" {local.year}" if local.year != datetime.now(self.tz).year else ""
         return {
             "weekday": local.strftime("%A"),
             "local_date": local.date().isoformat(),
             "local_time": local.strftime("%H:%M"),
-            "spoken_start": f"{local.strftime('%A')} {local.day} {local.strftime('%B %Y')} at {hour12}:{local.strftime('%M %p')}",
+            "spoken_start": f"{local.strftime('%A')} {local.day} {local.strftime('%B')}{year_suffix} at {hour12}:{local.strftime('%M %p')}",
         }
 
     def _resolve_caller_datetime(
@@ -551,7 +563,11 @@ class VoiceToolset:
         if (
             not candidates
             and target_date == datetime.now(self.tz).date()
-            and re.search(r"\b(?:monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat|sunday|sun)\b", caller_time_phrase or "", re.I)
+            and re.search(
+                r"\b(?:monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat|sunday|sun)\b",
+                caller_time_phrase or "",
+                re.I,
+            )
         ):
             candidates = await valid_meridiem_candidates(target_date + timedelta(days=7))
             if len(candidates) == 1:
@@ -809,6 +825,9 @@ class VoiceToolset:
         Generic booking availability is unsafe here because the LLM may pass a service ID
         where a label is expected, or may accidentally change the service/duration.
         """
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         verified_phone = self._verified_management_phone_from_caller()
         if not verified_phone:
             return self._management_identity_error()
@@ -928,6 +947,9 @@ class VoiceToolset:
         return result
 
     async def get_salon_information(self, question: str) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         services = [row for row in await self.services.list() if row.is_active]
         staff = [row for row in await self.staff.list() if row.is_active]
         hours = await self.hours.list()
@@ -953,6 +975,13 @@ class VoiceToolset:
                 {
                     "name": canonical_service_name(row.name),
                     "duration_minutes": row.duration_minutes,
+                    "price_cents": row.price,
+                    "price": (
+                        f"{row.price / 100:.2f} {self.tenant.currency}"
+                        if row.price is not None
+                        else None
+                    ),
+                    "prices_include_gst": bool(self.tenant.prices_include_gst),
                     "description": row.description,
                 }
                 for row in services
@@ -969,6 +998,9 @@ class VoiceToolset:
         staff_name: str | None = None,
         caller_time_phrase: str | None = None,
     ) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         service, service_choices = await self._resolve_service(service_name)
         if service is None:
             return {
@@ -1075,6 +1107,9 @@ class VoiceToolset:
         self, service_name: str, day_phrase: str, staff_name: str | None = None
     ) -> dict:
         """Return up to three calendar-confirmed appointment starts on a caller-stated day."""
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         service, service_choices = await self._resolve_service(service_name)
         if service is None:
             return {"ok": False, "code": "SERVICE_NOT_RESOLVED", "choices": service_choices}
@@ -1089,8 +1124,18 @@ class VoiceToolset:
         elif phrase == "tomorrow":
             target_date = now_local.date() + timedelta(days=1)
         else:
-            weekdays = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
-            match = re.search(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", phrase)
+            weekdays = {
+                "monday": 0,
+                "tuesday": 1,
+                "wednesday": 2,
+                "thursday": 3,
+                "friday": 4,
+                "saturday": 5,
+                "sunday": 6,
+            }
+            match = re.search(
+                r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", phrase
+            )
             if not match:
                 return {"ok": False, "code": "DATE_NOT_RESOLVED"}
             weekday = weekdays[match.group(1)]
@@ -1112,8 +1157,16 @@ class VoiceToolset:
 
         hours_rows = await self.hours.list()
         hours = next((row for row in hours_rows if row.day_of_week == target_date.weekday()), None)
-        if hours_rows and (hours is None or hours.is_closed or hours.opens_at is None or hours.closes_at is None):
-            return {"ok": True, "service": canonical_service_name(service.name), "day": target_date.strftime("%A"), "local_date": target_date.isoformat(), "slots": []}
+        if hours_rows and (
+            hours is None or hours.is_closed or hours.opens_at is None or hours.closes_at is None
+        ):
+            return {
+                "ok": True,
+                "service": canonical_service_name(service.name),
+                "day": target_date.strftime("%A"),
+                "local_date": target_date.isoformat(),
+                "slots": [],
+            }
 
         opening = hours.opens_at if hours else datetime.strptime("09:00", "%H:%M").time()
         closing = hours.closes_at if hours else datetime.strptime("17:00", "%H:%M").time()
@@ -1124,14 +1177,29 @@ class VoiceToolset:
             starts = cursor.astimezone(UTC)
             if starts > datetime.now(UTC):
                 try:
-                    available, _ = await self.booking.availability(starts_at=starts, service_id=service.id, staff_member_id=staff.id if staff else None)
+                    available, _ = await self.booking.availability(
+                        starts_at=starts,
+                        service_id=service.id,
+                        staff_member_id=staff.id if staff else None,
+                    )
                 except HTTPException as exc:
                     return self._error_payload(exc)
                 if available:
                     display = self._display_local_datetime(starts)
-                    slots.append({"starts_at": self._local_iso(starts), "spoken_start": display["spoken_start"]})
+                    slots.append(
+                        {
+                            "starts_at": self._local_iso(starts),
+                            "spoken_start": display["spoken_start"],
+                        }
+                    )
             cursor += timedelta(minutes=30)
-        return {"ok": True, "service": canonical_service_name(service.name), "day": target_date.strftime("%A"), "local_date": target_date.isoformat(), "slots": slots}
+        return {
+            "ok": True,
+            "service": canonical_service_name(service.name),
+            "day": target_date.strftime("%A"),
+            "local_date": target_date.isoformat(),
+            "slots": slots,
+        }
 
     async def book_appointment(
         self,
@@ -1146,6 +1214,9 @@ class VoiceToolset:
         # A final confirmation commits the exact previously prepared details. Do not
         # re-parse a newer transcript and accidentally shorten/replace the phone number
         # or revert an explicitly spelled name.
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         if confirmed:
             prepared = self.call_session.prepared_booking_payload
             if prepared is None:
@@ -1409,6 +1480,9 @@ class VoiceToolset:
         customer_name: str | None = None,
         caller_time_phrase: str | None = None,
     ) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         verified_phone = self._verified_management_phone_from_caller()
         if not verified_phone:
             return self._management_identity_error()
@@ -1510,6 +1584,9 @@ class VoiceToolset:
         confirmed: bool,
         caller_time_phrase: str | None = None,
     ) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         verified_phone = self._verified_management_phone_from_caller()
         if not verified_phone:
             return self._management_identity_error()
@@ -1631,6 +1708,9 @@ class VoiceToolset:
         }
 
     async def cancel_appointment(self, appointment_id: str, confirmed: bool) -> dict:
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
         verified_phone = self._verified_management_phone_from_caller()
         if not verified_phone:
             return self._management_identity_error()
@@ -1742,6 +1822,9 @@ class VoiceToolset:
         exact message, recipient and callback number have been read back and the
         latest finalized caller turn is an explicit affirmation.
         """
+        blocked = self._safety_blocked()
+        if blocked is not None:
+            return blocked
 
         if confirmed:
             prepared = self.call_session.prepared_message_payload

@@ -35,15 +35,55 @@ class TenantOut(APIModel):
     slug: str
     timezone: str
     phone_number: str | None
+    address: str | None
+    contact_email: EmailStr | None
+    currency: str
+    prices_include_gst: bool
+    ai_disclosure: str | None
+    walk_ins_policy: str | None
+    parking_info: str | None
+    accessibility_info: str | None
     greeting: str
     status: str
     trial_ends_at: datetime
 
 
+_ISO_4217_CURRENCY_CODES = frozenset(
+    """AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BOV BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU CRC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MXV MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD USN UYI UYU UYW UZS VED VES VND VUV WST XAF XAG XAU XBA XBB XBC XBD XCD XCG XDR XOF XPD XPF XPT XSU XTS XUA XXX YER ZAR ZMW ZWL""".split()
+)
+
+
 class TenantPatch(BaseModel):
+    @field_validator("prices_include_gst", mode="before")
+    @classmethod
+    def reject_null_gst_setting(cls, value):
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency_code(cls, value):
+        if value is None:
+            raise ValueError("Field cannot be null")
+        if not isinstance(value, str):
+            raise ValueError("Currency must be a valid ISO 4217 code")
+        code = value.strip().upper()
+        if code not in _ISO_4217_CURRENCY_CODES:
+            raise ValueError("Currency must be a valid ISO 4217 code")
+        return code
+
     name: str | None = Field(default=None, min_length=2, max_length=160)
     timezone: str | None = Field(default=None, max_length=64)
     phone_number: str | None = Field(default=None, max_length=32)
+    address: str | None = Field(default=None, max_length=300)
+    contact_email: EmailStr | None = None
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    prices_include_gst: bool | None = None
+    ai_disclosure: str | None = Field(default=None, max_length=500)
+    walk_ins_policy: str | None = Field(default=None, max_length=1000)
+    parking_info: str | None = Field(default=None, max_length=1000)
+    accessibility_info: str | None = Field(default=None, max_length=1000)
     greeting: str | None = Field(default=None, min_length=2, max_length=1000)
 
 

@@ -32,3 +32,10 @@ def is_health_only_request(text: str | None) -> bool:
 def is_immediate_emergency_language(text: str | None) -> bool:
     """Recognise explicit emergency language without trying to triage symptoms."""
     return bool(_IMMEDIATE_EMERGENCY.search(str(text or "")))
+
+
+def immediate_emergency_response(*, repeated: bool = False) -> str:
+    """Return concise NZ emergency wording with 111 spoken as separate digits."""
+    if repeated:
+        return "Please call one, one, one now. I can't provide medical help."
+    return "I can't provide medical help. Please call one, one, one now."

@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     groq_max_completion_tokens: int = 256
     groq_max_retries: int = 1
     groq_timeout_seconds: float = 10.0
+    # Conservative base-plan admission limit; override to match the Groq org/model quota.
+    groq_tokens_per_minute: int = 7_000
     groq_reasoning_effort: Literal["low", "medium", "high"] = "low"
     voice_context_turns: int = 4
     openrouter_model: str = "openrouter/free"

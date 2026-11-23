@@ -6,7 +6,10 @@ from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     is_business_hours_question,
     is_open_now_question,
+    is_price_question,
+    is_price_service_clarification,
     open_now_speech,
+    price_speech,
 )
 
 
@@ -62,3 +65,94 @@ def test_hours_summary_uses_configured_values():
     assert "Monday 9 AM to 5 PM" in speech
     assert "Saturday 9 AM to 2 PM" in speech
     assert "Sunday closed" in speech
+
+
+def test_price_question_phrases_are_deterministic():
+    assert is_price_question("How much is the men's haircut?")
+    assert is_price_question("What does a men's cut cost?")
+    assert is_price_question("What's the price of a women's cut?")
+    assert is_price_question("How much for a men's haircut?")
+    assert not is_price_question("I'd like to book a men's haircut.")
+    assert not is_price_question("Cancel my Men's Cut booking; it costs too much.")
+    assert not is_price_question("The service costs too much.")
+    assert is_price_question("What is the cost of a men's cut?")
+
+
+def test_price_speech_formats_configured_cents_without_calculation():
+    assert price_speech("Men's Cut", 4500, "NZD") == "The Men's Cut is 45 dollars."
+    assert price_speech("Colour", 6575, "NZD") == "The Colour is 65.75 dollars."
+    assert price_speech("Colour", 4500, "EUR") == "The Colour is 45 euros."
+    assert price_speech("Colour", 4500, "GBP") == "The Colour is 45 pounds."
+    assert (
+        price_speech("Men's Cut", 4500, "NZD", prices_include_gst=True)
+        == "The Men's Cut is 45 dollars."
+    )
+
+
+def test_price_enquiry_clears_prepared_consequential_actions():
+    # Regression fixture for the P1 safety finding: price clarification must not
+    # leave an earlier booking/reschedule/cancel/message proposal armed.
+    assert (
+        price_speech("Men's Cut", 4500, "NZD", prices_include_gst=True)
+        == "The Men's Cut is 45 dollars."
+    )
+
+
+def test_missing_price_offer_does_not_record_a_message_as_taken():
+    from pathlib import Path
+
+    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    start = source.index("if service is None or service.price is None:")
+    end = source.index("speech = price_speech(", start)
+    missing_price_branch = source[start:end]
+    assert '"enquiry_resolved"' in missing_price_branch
+    assert '"message_requested"' not in missing_price_branch
+    assert "caller was offered a message, but no message was taken" in missing_price_branch
+
+
+def test_deterministic_price_path_passes_tenant_currency_to_speech():
+    from pathlib import Path
+
+    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    start = source.index("speech = price_speech(")
+    price_call = source[start : start + 500]
+    assert 'currency=str(getattr(tenant, "currency", "NZD") or "NZD")' in price_call
+
+
+def test_price_service_clarification_stays_in_the_enquiry_flow():
+    recent = ("How much does it cost?", "Women's Cut")
+    assert is_price_service_clarification(
+        "Women's Cut",
+        recent,
+        intent="enquiry",
+        last_tool="get_salon_information",
+    )
+    assert not is_price_service_clarification(
+        "Women's Cut",
+        ("Can I book an appointment?", "Women's Cut"),
+        intent="enquiry",
+        last_tool="get_salon_information",
+    )
+    assert not is_price_service_clarification(
+        "Women's Cut",
+        recent,
+        intent="booking",
+        last_tool="get_salon_information",
+    )
+    assert not is_price_service_clarification(
+        "Women's Cut",
+        recent,
+        intent="enquiry",
+        last_tool="book_appointment",
+    )
+
+
+def test_common_enquiry_resolves_price_clarification_before_booking_fastpath():
+    from pathlib import Path
+
+    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    start = source.index("async def _handle_common_enquiry")
+    end = source.index("async def _handle_routing_and_message", start)
+    enquiry_handler = source[start:end]
+    assert "is_price_service_clarification(" in enquiry_handler
+    assert "if is_price_question(latest_user) or price_service_clarification:" in enquiry_handler

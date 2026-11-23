@@ -171,3 +171,30 @@ def test_mixed_no_with_bare_number_word_is_not_swallowed_by_fastpath():
         is_rejection=is_explicit_rejection(text),
     )
     assert action is None
+
+
+def test_spoken_booking_date_omits_current_year_but_keeps_a_different_year():
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    from services.voice.tools import VoiceToolset
+
+    timezone = ZoneInfo("Pacific/Auckland")
+    toolset = object.__new__(VoiceToolset)
+    toolset.tz = timezone
+    current_year = datetime.now(timezone).year
+
+    same_year = toolset._display_local_datetime(
+        datetime(current_year, 11, 25, 12, 0, tzinfo=timezone).astimezone(UTC)
+    )
+    assert same_year["spoken_start"] == (
+        f"{datetime(current_year, 11, 25).strftime('%A')} 25 November at 12:00 PM"
+    )
+    assert str(current_year) not in same_year["spoken_start"]
+
+    next_year = toolset._display_local_datetime(
+        datetime(current_year + 1, 1, 15, 12, 0, tzinfo=timezone).astimezone(UTC)
+    )
+    assert next_year["spoken_start"] == (
+        f"{datetime(current_year + 1, 1, 15).strftime('%A')} 15 January {current_year + 1} at 12:00 PM"
+    )

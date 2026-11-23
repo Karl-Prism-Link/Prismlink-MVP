@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from database.repositories import MessageRepository, TenantRepository
 from database.session import DBSession
 from services.voice.contact import is_explicit_affirmation, is_explicit_rejection
@@ -11,8 +13,12 @@ from services.voice.message_routing import (
     routing_fallback_speech,
 )
 from services.voice.model_router import confirmation_fastpath_action
-from services.voice.safety import is_health_only_request, is_immediate_emergency_language
-from services.voice.session import LiveCallSession
+from services.voice.safety import (
+    immediate_emergency_response,
+    is_health_only_request,
+    is_immediate_emergency_language,
+)
+from services.voice.session import LiveCallSession, VoiceConversationState
 from services.voice.speech_cleanup import (
     deterministic_post_action_social_reply,
     is_farewell_utterance,
@@ -60,6 +66,17 @@ def test_health_only_requests_are_never_routed_as_medical_advice():
     assert is_health_only_request("I need to book a haircut") is False
     assert is_immediate_emergency_language("I can't breathe") is True
     assert is_immediate_emergency_language("I cut my finger") is False
+
+
+def test_emergency_response_speaks_new_zealand_111_as_separate_digits():
+    assert (
+        immediate_emergency_response()
+        == "I can't provide medical help. Please call one, one, one now."
+    )
+    assert (
+        immediate_emergency_response(repeated=True)
+        == "Please call one, one, one now. I can't provide medical help."
+    )
 
 
 def test_message_request_and_inline_message_are_detected():
@@ -162,3 +179,63 @@ async def test_message_tool_requires_prepare_and_fresh_yes(client):
         assert live.resolution.outcome == "message_taken"
     finally:
         await db.close()
+
+
+def test_immediate_safety_state_is_persistent_and_blocks_workflow_state():
+    state = VoiceConversationState()
+    assert state.immediate_safety_active is False
+    assert state.safety_response_sent is False
+
+    state.immediate_safety_active = True
+    state.safety_reason = "immediate_emergency"
+    state.safety_response_sent = True
+
+    assert state.immediate_safety_active is True
+    assert state.safety_reason == "immediate_emergency"
+    assert state.safety_response_sent is True
+
+
+@pytest.mark.asyncio
+async def test_immediate_safety_blocks_every_voice_tool_at_the_tool_boundary():
+    """A model/tool call cannot bypass the runtime emergency guard."""
+    from services.voice.tools import VoiceToolset
+
+    session = LiveCallSession.__new__(LiveCallSession)
+    session.call = None
+    session.voice_state = VoiceConversationState()
+    session._prepared_booking_fingerprint = "booking"
+    session._prepared_booking_payload = {"public": {"service": "Women's Cut"}}
+    session._prepared_reschedule_fingerprint = "reschedule"
+    session._prepared_cancel_fingerprint = "cancel"
+    session._prepared_message_fingerprint = "message"
+    session._prepared_message_payload = {"message": "call back"}
+    session._message_readback_completed = True
+    session._booking_phone_capture_active = True
+    session._booking_name_capture_active = True
+    session._message_phone_digits = "0211234567"
+    session._verified_management_phone = "0211234567"
+    await session.activate_immediate_safety("immediate_emergency")
+
+    tools = VoiceToolset.__new__(VoiceToolset)
+    tools.call_session = session
+    results = await __import__("asyncio").gather(
+        tools.get_salon_information("opening hours"),
+        tools.check_availability("Women's Cut", "tomorrow 10am"),
+        tools.find_available_times("Women's Cut", "tomorrow"),
+        tools.book_appointment("Women's Cut", "2026-11-24T10:00", "Caller", "0211234567", False),
+        tools.check_reschedule_availability("appointment", "2026-11-24T10:00"),
+        tools.find_appointments("0211234567"),
+        tools.reschedule_appointment("appointment", "2026-11-24T10:00", True),
+        tools.cancel_appointment("appointment", True),
+        tools.take_message("Call me back", "0211234567", "Caller", True),
+    )
+    assert all(result["code"] == "IMMEDIATE_SAFETY_ACTIVE" for result in results)
+    assert all(result["safety_active"] is True for result in results)
+    assert session.immediate_safety_active is True
+    assert session.has_prepared_message is False
+    assert session.has_prepared_reschedule is False
+    assert session.has_prepared_cancel is False
+    assert session.booking_phone_capture_active is False
+    assert session.booking_name_capture_active is False
+    assert "immediate_safety_active=true" in session.voice_state_summary
+    assert "safety_reason=immediate_emergency" in session.voice_state_summary
