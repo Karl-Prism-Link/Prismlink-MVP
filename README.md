@@ -71,17 +71,46 @@ keys and shared control tokens in the ignored `.env` file.
 
 ## Database
 
-Local PostgreSQL and Redis are available through Compose:
+SQLite remains the zero-setup default for lightweight local development and tests. For a local
+PostgreSQL instance, the repository provides a Compose service. Docker Compose reads the private
+`.env` file for the PostgreSQL credentials:
 
-```powershell
+1. Copy `.env.example` to `.env` if you have not already done so.
+2. Set `POSTGRES_PASSWORD` in `.env` to a strong local development password. Keep this file
+   private; never commit it.
+3. Start PostgreSQL and Redis:
+
+```bash
 docker compose up -d postgres redis
+docker compose ps
 ```
 
-Configure PostgreSQL in `.env`, then apply migrations:
+The Compose database is named `prism_link` and its default role is `prism_link_app`. The
+PostgreSQL port is bound to `127.0.0.1`, not exposed on the LAN. Configure the API's
+`DATABASE_URL` in `.env` to use the same username and password:
 
-```powershell
+```dotenv
+DATABASE_URL=postgresql+psycopg://prism_link_app:URL_ENCODED_PASSWORD@127.0.0.1:5432/prism_link
+```
+
+Replace `URL_ENCODED_PASSWORD` with the URL-encoded value of `POSTGRES_PASSWORD`. URL-encode
+reserved characters in the password (for example, `@`, `/`, `:`, and `#`). Do not put
+literal placeholder text in the actual connection string.
+
+Apply the repository's Alembic migrations before running against PostgreSQL:
+
+```bash
 python -m alembic upgrade head
+python -m alembic current
 ```
+
+Then start or restart the API. To return to the default SQLite development setup, set
+`DATABASE_URL=sqlite:///./prism_link.db` and restart the API.
+
+**Existing Compose volumes:** PostgreSQL only applies `POSTGRES_USER`, `POSTGRES_DB`, and
+`POSTGRES_PASSWORD` when it initializes an empty data directory. Changing these values does not
+rename or update roles in an existing `prism_postgres` volume. Do not delete the volume to resolve
+an authentication issue; inspect and migrate the existing database deliberately.
 
 Development startup creates missing tables for convenience. Production startup deliberately
 requires migrations and will not create tables automatically. Redis is provisioned for the live
