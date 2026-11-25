@@ -120,11 +120,15 @@ _INTENT_TOOL_ALLOWLISTS = {
     ),
     "message": frozenset({"get_salon_information", "take_message"}),
     "routing": frozenset({"get_salon_information", "take_message"}),
+    "enquiry": frozenset({"get_salon_information", "take_message"}),
 }
 
 
 def select_voice_tool_schemas(
-    tools: Sequence[dict[str, Any]], *, intent: str | None
+    tools: Sequence[dict[str, Any]],
+    *,
+    intent: str | None,
+    routing_reason: str | None = None,
 ) -> list[dict[str, Any]]:
     """Limit each classified turn to tools needed for that workflow.
 
@@ -132,7 +136,10 @@ def select_voice_tool_schemas(
     retained so future/provider tools cannot silently become unavailable.
     Tool handlers remain the authority for all consequential actions.
     """
-    allowed = _INTENT_TOOL_ALLOWLISTS.get(str(intent or "unknown").casefold())
+    scope_intent = str(intent or "unknown").casefold()
+    if scope_intent == "unknown" and routing_reason == "salon_enquiry":
+        scope_intent = "enquiry"
+    allowed = _INTENT_TOOL_ALLOWLISTS.get(scope_intent)
     if allowed is None:
         return list(tools)
     known_tools = set().union(*_INTENT_TOOL_ALLOWLISTS.values())

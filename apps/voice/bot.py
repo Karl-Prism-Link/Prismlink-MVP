@@ -395,6 +395,7 @@ async def run_bot(
                     params["tools"] = select_voice_tool_schemas(
                         params.get("tools") or [],
                         intent=call_session.voice_state.intent,
+                        routing_reason=decision.reason,
                     )
                     selected_tool_count = len(params["tools"])
                     if selected_tool_count < original_tool_count:

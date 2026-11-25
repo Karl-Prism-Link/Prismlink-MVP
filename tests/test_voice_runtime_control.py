@@ -181,6 +181,28 @@ def test_booking_intent_exposes_only_booking_and_safe_message_tools():
     assert "reschedule_appointment" not in names
 
 
+def test_salon_enquiry_exposes_only_information_and_safe_message_tools():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    names = {
+        item["function"]["name"]
+        for item in select_voice_tool_schemas(
+            tools, intent="unknown", routing_reason="salon_enquiry"
+        )
+    }
+    assert names == {"get_salon_information", "take_message"}
+
+
 def test_appointment_management_keeps_required_read_and_mutation_tools():
     tools = [
         {"type": "function", "function": {"name": name}}
