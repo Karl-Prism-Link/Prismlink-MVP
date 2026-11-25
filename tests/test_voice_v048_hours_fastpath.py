@@ -156,7 +156,7 @@ def test_common_enquiry_resolves_price_clarification_before_booking_fastpath():
     end = source.index("async def _handle_routing_and_message", start)
     enquiry_handler = source[start:end]
     assert "is_price_service_clarification(" in enquiry_handler
-    assert "if is_price_question(latest_user) or price_service_clarification:" in enquiry_handler
+    assert "if has_price_intent and not has_other_action:" in enquiry_handler
 
 
 def test_price_fastpath_yields_when_caller_also_requests_an_action():
