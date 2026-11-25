@@ -102,7 +102,7 @@ def test_price_enquiry_clears_prepared_consequential_actions():
 def test_missing_price_offer_does_not_record_a_message_as_taken():
     from pathlib import Path
 
-    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    source = (Path(__file__).parents[1] / "services" / "voice" / "turn_handlers.py").read_text()
     start = source.index("if service is None or service.price is None:")
     end = source.index("speech = price_speech(", start)
     missing_price_branch = source[start:end]
@@ -114,7 +114,7 @@ def test_missing_price_offer_does_not_record_a_message_as_taken():
 def test_deterministic_price_path_passes_tenant_currency_to_speech():
     from pathlib import Path
 
-    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    source = (Path(__file__).parents[1] / "services" / "voice" / "turn_handlers.py").read_text()
     start = source.index("speech = price_speech(")
     price_call = source[start : start + 500]
     assert 'currency=str(getattr(tenant, "currency", "NZD") or "NZD")' in price_call
@@ -151,10 +151,8 @@ def test_price_service_clarification_stays_in_the_enquiry_flow():
 def test_common_enquiry_resolves_price_clarification_before_booking_fastpath():
     from pathlib import Path
 
-    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
-    start = source.index("async def _handle_common_enquiry")
-    end = source.index("async def _handle_routing_and_message", start)
-    enquiry_handler = source[start:end]
+    source = (Path(__file__).parents[1] / "services" / "voice" / "turn_handlers.py").read_text()
+    enquiry_handler = source
     assert "is_price_service_clarification(" in enquiry_handler
     assert "if has_price_intent and not has_other_action:" in enquiry_handler
 
@@ -186,10 +184,8 @@ def test_price_fastpath_keeps_pure_enquiries_and_policy_questions():
 def test_common_enquiry_price_fastpath_yields_to_mixed_action_intents():
     from pathlib import Path
 
-    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
-    start = source.index("async def _handle_common_enquiry")
-    end = source.index("async def _handle_routing_and_message", start)
-    enquiry_handler = source[start:end]
+    source = (Path(__file__).parents[1] / "services" / "voice" / "turn_handlers.py").read_text()
+    enquiry_handler = source
     assert "has_price_intent and not has_other_action" in enquiry_handler
 
 
@@ -198,13 +194,13 @@ def test_common_enquiry_guard_expression_routes_mixed_intents_past_price_fastpat
     import ast
     from pathlib import Path
 
-    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    source = (Path(__file__).parents[1] / "services" / "voice" / "turn_handlers.py").read_text()
     tree = ast.parse(source)
     handler = next(
         node
         for node in ast.walk(tree)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name == "_handle_common_enquiry"
+        and node.name == "handle_common_enquiry"
     )
     guard = next(
         node
@@ -241,13 +237,13 @@ def test_common_enquiry_returns_false_after_mixed_intent_skips_price_branch():
     import ast
     from pathlib import Path
 
-    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    source = (Path(__file__).parents[1] / "services" / "voice" / "turn_handlers.py").read_text()
     tree = ast.parse(source)
     handler = next(
         node
         for node in ast.walk(tree)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name == "_handle_common_enquiry"
+        and node.name == "handle_common_enquiry"
     )
     price_guard_index = next(
         index
@@ -267,8 +263,11 @@ def test_common_enquiry_returns_false_after_mixed_intent_skips_price_branch():
 
     # The caller-turn dispatcher must continue to the action handlers when the
     # common-enquiry handler returns False.
-    dispatch_start = source.index("if await self._handle_common_enquiry(latest_user, direction):")
-    dispatch_block = source[dispatch_start : dispatch_start + 700]
+    bot_source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    dispatch_start = bot_source.index(
+        "if await self._handle_common_enquiry(latest_user, direction):"
+    )
+    dispatch_block = bot_source[dispatch_start : dispatch_start + 700]
     handler_order = (
         "_handle_common_enquiry",
         "_handle_routing_and_message",
