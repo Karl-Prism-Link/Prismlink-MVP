@@ -77,7 +77,8 @@ _ACTION_REQUEST_RE = re.compile(
     r"|can\s+you\s+cancel|reschedul(?:e|ing)"
     r"|move\s+(?:my|the)\s+(?:appointment|booking)"
     r"|change\s+(?:my|the)\s+(?:appointment|booking)"
-    r"|book\s+(?:me\s+)?(?:in|an?\s+appointment)"
+    r"|book\s+(?:me\s+)?(?:in|one|it|an?\s+appointment)"
+    r"|book\s+(?:an?\s+)?[\w'-]+(?:\s+[\w'-]+){0,2}"
     r"|make\s+(?:an?\s+)?booking|schedule\s+(?:an?\s+)?appointment"
     r"|leave\s+(?:a\s+)?message|take\s+(?:a\s+)?message"
     r")\b",

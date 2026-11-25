@@ -95,13 +95,16 @@ def route_voice_turn(
     if _SIMPLE_SOCIAL_RE.match(text):
         return RoutingDecision(ModelTier.FAST, "simple_social", use_tools=False)
 
-    if intent in {"cancel", "reschedule", "appointment_management"}:
-        return RoutingDecision(ModelTier.REASONING, "appointment_management", use_tools=True)
-
-    # Current-turn action wording must override a stale enquiry/message intent.
-    # Tool handlers still enforce confirmation and all mutation safety checks.
+    # Inspect the current utterance before consulting a previous workflow's
+    # session intent. Pipecat may build this context frame before the caller-turn
+    # callback updates state, so a fresh booking must supersede stale
+    # appointment_management/cancel/reschedule scope. Tool handlers still enforce
+    # confirmation and all mutation safety checks.
     if _CONSEQUENTIAL_ACTION_RE.search(lowered):
         return RoutingDecision(ModelTier.REASONING, "consequential_action_request", use_tools=True)
+
+    if intent in {"cancel", "reschedule", "appointment_management"}:
+        return RoutingDecision(ModelTier.REASONING, "appointment_management", use_tools=True)
 
     if intent in {"message", "routing"}:
         return RoutingDecision(ModelTier.FAST, "message_or_routing", use_tools=True)

@@ -5,6 +5,7 @@ from services.voice.model_router import (
     flatten_tool_result_messages,
     route_voice_turn,
 )
+from services.voice.runtime_control import select_voice_tool_schemas
 from services.voice.speech_cleanup import booking_success_speech
 
 
@@ -198,3 +199,33 @@ def test_spoken_booking_date_omits_current_year_but_keeps_a_different_year():
     assert next_year["spoken_start"] == (
         f"{datetime(current_year + 1, 1, 15).strftime('%A')} 15 January {current_year + 1} at 12:00 PM"
     )
+
+
+def test_current_booking_turn_overrides_stale_appointment_management_intent():
+    result = decision(
+        intent="appointment_management",
+        last_tool="find_appointments",
+        last_tool_ok=True,
+        latest_user_text="How much is a men's cut? I'd like to book one for Friday.",
+    )
+    assert result.tier is ModelTier.REASONING
+    assert result.use_tools is True
+    assert result.reason == "consequential_action_request"
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    selected = select_voice_tool_schemas(
+        tools,
+        intent="appointment_management",
+        routing_reason=result.reason,
+    )
+    assert "book_appointment" in {tool["function"]["name"] for tool in selected}
