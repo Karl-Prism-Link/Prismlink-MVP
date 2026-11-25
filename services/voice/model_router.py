@@ -86,7 +86,11 @@ def route_voice_turn(
         if last_tool_ok is False:
             return RoutingDecision(ModelTier.REASONING, "tool_failure_recovery", use_tools=False)
         if intent in {"cancel", "reschedule", "appointment_management"}:
-            return RoutingDecision(ModelTier.REASONING, "management_tool_readback", use_tools=False)
+            # A successful lookup result is read-only narration, not a new
+            # consequential decision. Keep the stronger model for interpreting
+            # the caller's management request and for recovering from tool
+            # failures, but use the fast tier to relay the authoritative result.
+            return RoutingDecision(ModelTier.FAST, "management_tool_readback", use_tools=False)
         return RoutingDecision(ModelTier.FAST, "tool_result_readback", use_tools=False)
 
     if confirmed and _SIMPLE_SOCIAL_RE.match(text):
