@@ -24,6 +24,8 @@ class FakeSession:
         self.updates = []
         self._prepared_booking_payload = None
         self._prepared_booking_fingerprint = None
+        self._prepared_reschedule = False
+        self._prepared_cancel = False
         self.mutations = []
 
     @property
@@ -39,16 +41,28 @@ class FakeSession:
         return bool(self._prepared_booking_fingerprint and self._prepared_booking_payload)
 
     @property
-    def has_prepared_reschedule(self):
+    def has_prepared_message(self):
         return False
+
+    @property
+    def has_prepared_reschedule(self):
+        return self._prepared_reschedule
 
     @property
     def has_prepared_cancel(self):
-        return False
+        return self._prepared_cancel
 
-    @property
-    def has_prepared_message(self):
-        return False
+    def prepare_reschedule(self, _fingerprint):
+        self._prepared_reschedule = True
+
+    def clear_prepared_reschedule(self):
+        self._prepared_reschedule = False
+
+    def prepare_cancel(self, _fingerprint):
+        self._prepared_cancel = True
+
+    def clear_prepared_cancel(self):
+        self._prepared_cancel = False
 
     def prepare_booking(self, fingerprint, payload):
         self._prepared_booking_fingerprint = fingerprint
@@ -74,6 +88,10 @@ class FakeSession:
         self.updates.append(changes)
         for key, value in changes.items():
             setattr(self.voice_state, key, value)
+
+    def clear_voice_state_fields(self, *names):
+        for name in names:
+            setattr(self.voice_state, name, None)
 
     async def append_transcript(self, role, text):
         self.transcripts.append((role, text))
@@ -138,6 +156,8 @@ class FakeTools:
 
     async def check_reschedule_availability(self, *args):
         self.calls.append(("check_reschedule_availability", args))
+        if self.session is not None:
+            self.session.prepare_reschedule("prepared-reschedule-fingerprint")
         return {
             "ok": True,
             "available": True,
@@ -188,9 +208,16 @@ class FakeTools:
 
     async def cancel_appointment(self, *args):
         self.calls.append(("cancel_appointment", args))
+        confirmed = bool(args[1])
+        if self.session is not None and not confirmed:
+            self.session.prepare_cancel("prepared-cancel-fingerprint")
+        if self.session is not None and confirmed:
+            self.session.mutations.append(("cancel", args[0]))
+            self.session.clear_prepared_cancel()
         return {
             "ok": True,
-            "cancelled": bool(args[1]),
+            "cancelled": confirmed,
+            "ready_to_confirm": not confirmed,
             "service": "Colour",
             "starts_at": "2026-12-04T11:00:00+13:00",
             "appointment_id": args[0],
@@ -198,9 +225,13 @@ class FakeTools:
 
     async def reschedule_appointment(self, *args):
         self.calls.append(("reschedule_appointment", args))
+        confirmed = bool(args[2])
+        if self.session is not None and confirmed:
+            self.session.mutations.append(("reschedule", args[0], args[1]))
+            self.session.clear_prepared_reschedule()
         return {
             "ok": True,
-            "rescheduled": bool(args[2]),
+            "rescheduled": confirmed,
             "service": "Colour",
             "starts_at": "2026-12-05T12:00:00+13:00",
             "appointment_id": args[0],
@@ -441,3 +472,104 @@ async def test_complete_pipecat_booking_journey_requires_exact_bare_confirmation
         assert session.mutations == []
         assert session.voice_state.confirmed is False
         assert session.prepared_booking_payload["starts_at"] == "2026-12-04T10:00:00+13:00"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("caller_reply", "expected_mutations", "expected_handled", "expected_prepared"),
+    [
+        ("yes", 1, True, False),
+        ("no", 0, True, False),
+        ("yes, but change the time", 0, False, True),
+    ],
+)
+async def test_complete_pipecat_cancellation_journey_requires_exact_bare_confirmation(
+    caller_reply, expected_mutations, expected_handled, expected_prepared
+):
+    session = FakeSession()
+    session.voice_state.intent = "cancel"
+    tools = FakeTools(session)
+    handlers = create_voice_tool_handlers(session, tools)
+
+    lookup = FakeParams({"customer_phone": "0211234567"})
+    await handlers["find_appointments"](lookup)
+    assert lookup.results[0][0]["ready_to_confirm"] is True
+    assert session.has_prepared_cancel is True
+
+    context = LLMContext(messages=[{"role": "user", "content": caller_reply}])
+    latest = await latest_caller_text_from_frame(LLMContextFrame(context), session)
+
+    async def speak(_text, _direction):
+        return None
+
+    handled = await handle_confirmation_turn(
+        latest, call_session=session, tools=tools, speak=speak, direction="downstream"
+    )
+
+    assert handled is expected_handled
+    assert len(session.mutations) == expected_mutations
+    assert session.has_prepared_cancel is expected_prepared
+    if caller_reply == "yes":
+        assert session.mutations == [("cancel", "apt-2")]
+        assert session.voice_state.confirmed is True
+    elif caller_reply == "no":
+        assert session.mutations == []
+        assert session.voice_state.confirmed is False
+    else:
+        assert session.mutations == []
+        assert session.voice_state.confirmed is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("caller_reply", "expected_mutations", "expected_handled", "expected_prepared"),
+    [
+        ("yes", 1, True, False),
+        ("no", 0, True, False),
+        ("yes, but change the time", 0, False, True),
+    ],
+)
+async def test_complete_pipecat_reschedule_journey_requires_exact_bare_confirmation(
+    caller_reply, expected_mutations, expected_handled, expected_prepared
+):
+    session = FakeSession()
+    session.voice_state.intent = "appointment_management"
+    session.voice_state.appointment_id = "apt-2"
+    tools = FakeTools(session)
+    handlers = create_voice_tool_handlers(session, tools)
+
+    availability = FakeParams(
+        {
+            "service_name": "LLM-supplied wrong service",
+            "starts_at_local": "Saturday noon",
+            "staff_name": None,
+            "caller_time_phrase": "Saturday at noon",
+        }
+    )
+    await handlers["check_availability"](availability)
+    assert availability.results[0][0]["available"] is True
+    assert availability.results[0][0]["service"] == "Colour"
+    assert session.has_prepared_reschedule is True
+
+    context = LLMContext(messages=[{"role": "user", "content": caller_reply}])
+    latest = await latest_caller_text_from_frame(LLMContextFrame(context), session)
+
+    async def speak(_text, _direction):
+        return None
+
+    handled = await handle_confirmation_turn(
+        latest, call_session=session, tools=tools, speak=speak, direction="downstream"
+    )
+
+    assert handled is expected_handled
+    assert len(session.mutations) == expected_mutations
+    assert session.has_prepared_reschedule is expected_prepared
+    if caller_reply == "yes":
+        assert session.mutations == [("reschedule", "apt-2", "2026-12-05T12:00:00+13:00")]
+        assert session.voice_state.confirmed is True
+    elif caller_reply == "no":
+        assert session.mutations == []
+        assert session.voice_state.confirmed is False
+    else:
+        assert session.mutations == []
+        assert session.voice_state.confirmed is False
