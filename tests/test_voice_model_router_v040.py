@@ -227,5 +227,9 @@ def test_current_booking_turn_overrides_stale_appointment_management_intent():
         tools,
         intent="appointment_management",
         routing_reason=result.reason,
+        latest_user_text="How much is a men's cut? I'd like to book one for Friday.",
     )
-    assert "book_appointment" in {tool["function"]["name"] for tool in selected}
+    selected_names = {tool["function"]["name"] for tool in selected}
+    assert {"book_appointment", "check_availability"} <= selected_names
+    assert "reschedule_appointment" not in selected_names
+    assert "cancel_appointment" not in selected_names

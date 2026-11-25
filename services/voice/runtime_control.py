@@ -129,6 +129,7 @@ def select_voice_tool_schemas(
     *,
     intent: str | None,
     routing_reason: str | None = None,
+    latest_user_text: str | None = None,
 ) -> list[dict[str, Any]]:
     """Limit each classified turn to tools needed for that workflow.
 
@@ -138,11 +139,28 @@ def select_voice_tool_schemas(
     """
     scope_intent = str(intent or "unknown").casefold()
     if routing_reason == "consequential_action_request":
-        # The session intent may still describe any previous workflow (including
-        # booking) when Pipecat builds the LLM context frame. Derive tool scope
-        # from the current caller turn so management actions retain their tools.
-        # Consequential handlers still enforce confirmation and mutation safety.
-        scope_intent = "unknown"
+        # Scope from the current caller request, not stale session intent. This
+        # keeps the required action tools while avoiding the full schema payload.
+        text = " ".join(str(latest_user_text or "").casefold().split())
+        requested: set[str] = set()
+        if re.search(
+            r"\b(reschedul(?:e|ing)|resched|another time|different time|"
+            r"move (?:it|my appointment)|change (?:it|my appointment))\b",
+            text,
+        ):
+            requested.add("reschedule")
+        if re.search(r"\b(cancel|cancellation)\b", text):
+            requested.add("cancel")
+        if re.search(r"\b(book|booking|schedule|reserve)\b", text) and not re.search(
+            r"\bresched", text
+        ):
+            requested.add("booking")
+        if len(requested) == 1:
+            scope_intent = next(iter(requested))
+        elif len(requested) > 1:
+            scope_intent = (
+                "appointment_management" if requested == {"cancel", "reschedule"} else "unknown"
+            )
     if scope_intent == "unknown" and routing_reason == "salon_enquiry":
         scope_intent = "enquiry"
     allowed = _INTENT_TOOL_ALLOWLISTS.get(scope_intent)

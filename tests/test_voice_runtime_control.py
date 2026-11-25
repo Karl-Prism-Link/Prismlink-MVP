@@ -226,6 +226,40 @@ def test_appointment_management_keeps_required_read_and_mutation_tools():
         assert expected <= names
 
 
+def test_reschedule_request_scopes_tools_even_when_session_intent_is_unknown():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    selected = select_voice_tool_schemas(
+        tools,
+        intent="unknown",
+        routing_reason="consequential_action_request",
+        latest_user_text=(
+            "I have a booking for Friday at 3PM under Shell. "
+            "I'd like to reschedule it to another time, please."
+        ),
+    )
+    names = {item["function"]["name"] for item in selected}
+    assert names == {
+        "get_salon_information",
+        "find_appointments",
+        "check_availability",
+        "reschedule_appointment",
+        "take_message",
+    }
+    assert "book_appointment" not in names
+    assert "cancel_appointment" not in names
+
+
 def test_unknown_intent_keeps_all_tools_and_unrecognised_schema_entries():
     tools = [
         {"type": "function", "function": {"name": "book_appointment"}},

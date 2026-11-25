@@ -626,12 +626,15 @@ def test_current_pipecat_turn_overrides_stale_enquiry_tool_scope():
         tools,
         intent=stale_session_intent,
         routing_reason=decision.reason,
+        latest_user_text=latest_user,
     )
     names = {tool["function"]["name"] for tool in selected}
-    assert "book_appointment" in names
-    assert "check_availability" in names
-    assert "cancel_appointment" in names
-    assert "reschedule_appointment" in names
+    assert {
+        "get_salon_information",
+        "check_availability",
+        "book_appointment",
+        "take_message",
+    } == names
 
 
 def test_current_information_only_turn_keeps_narrow_enquiry_scope():
@@ -723,12 +726,15 @@ def test_current_pipecat_cancel_turn_overrides_stale_booking_tool_scope():
         tools,
         intent=stale_session_intent,
         routing_reason=decision.reason,
+        latest_user_text=latest_user,
     )
     names = {tool["function"]["name"] for tool in selected}
-    assert "find_appointments" in names
-    assert "cancel_appointment" in names
-    assert "book_appointment" in names
-    assert "reschedule_appointment" in names
+    assert {
+        "get_salon_information",
+        "find_appointments",
+        "cancel_appointment",
+        "take_message",
+    } == names
 
 
 def test_new_booking_turn_clears_stale_management_appointment_selection():

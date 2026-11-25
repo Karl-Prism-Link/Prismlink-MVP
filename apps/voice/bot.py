@@ -408,6 +408,7 @@ async def run_bot(
                         params.get("tools") or [],
                         intent=call_session.voice_state.intent,
                         routing_reason=decision.reason,
+                        latest_user_text=latest_user,
                     )
                 if not decision.use_tools:
                     params.pop("tools", None)
