@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
 
-from database.repositories import AppointmentRepository, TenantRepository
+from database.repositories import AppointmentRepository, CallRepository, TenantRepository
 from database.session import DBSession
 from services.voice.session import LiveCallSession
+from services.voice.speech_cleanup import booking_success_speech
 from services.voice.tools import VoiceToolset
 
 
@@ -131,6 +132,152 @@ async def test_immediate_safety_state_survives_session_rehydration(client):
             await reloaded_db.close()
     finally:
         await restored_db.close()
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_new_call_starts_with_fresh_inactive_safety_state(client):
+    db, live, _tools = await booking_context(client, slug="safety-fresh-call")
+    fresh_db = DBSession()
+    try:
+        await live.activate_immediate_safety("immediate_emergency")
+        assert live.immediate_safety_active is True
+
+        fresh = LiveCallSession(
+            fresh_db,
+            tenant_id=live.tenant_id,
+            external_call_id=f"{live.external_call_id}-next",
+            caller_number=live.caller_number,
+            called_number=live.called_number,
+        )
+        await fresh.start()
+
+        assert fresh.call is not None
+        assert fresh.call.id != live.call.id
+        assert fresh.immediate_safety_active is False
+        assert fresh.voice_state.safety_reason is None
+        assert fresh.voice_state.safety_response_sent is False
+    finally:
+        await fresh_db.close()
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_mock_booking_lifecycle_persists_consistent_call_evidence(client):
+    db, live, tools = await booking_context(client, slug="booking-lifecycle-evidence")
+    try:
+        starts_at = next_weekday_iso(2)
+        time_phrase = datetime.fromisoformat(starts_at).strftime("%A %d %B %Y at 2 pm")
+        await live.append_transcript(
+            "caller",
+            "My name is Jane Doe and my number is zero two one three three three three three three three.",
+        )
+
+        availability = await tools.check_availability(
+            "Haircut", starts_at, caller_time_phrase=time_phrase
+        )
+        assert availability["ok"] is True
+        assert availability["available"] is True
+        live.update_voice_state(
+            intent="booking",
+            service=availability["service"],
+            starts_at=availability["starts_at"],
+            caller_time_phrase=availability["caller_time_phrase"],
+            last_tool="check_availability",
+            last_tool_ok=True,
+        )
+
+        prepared = await tools.book_appointment(
+            "Haircut",
+            starts_at,
+            "Jane Doe",
+            "0213333333",
+            False,
+            caller_time_phrase=time_phrase,
+        )
+        assert prepared["ok"] is True
+        assert prepared["ready_to_confirm"] is True
+        assert prepared["booked"] is False
+        appointments_before_confirmation = await AppointmentRepository(db, live.tenant_id).list()
+        assert not [
+            appointment
+            for appointment in appointments_before_confirmation
+            if appointment.call_id == live.call_id
+        ]
+        confirmation = (
+            f"{prepared['spoken_start']}, Jane Doe, {prepared['spoken_phone']}. Is that correct?"
+        )
+        await live.append_transcript("assistant", confirmation)
+        await live.append_transcript("caller", "Yes, that's correct.")
+
+        created = await tools.book_appointment(
+            "Haircut",
+            starts_at,
+            "Jane Doe",
+            "0213333333",
+            True,
+            caller_time_phrase=time_phrase,
+        )
+        assert created["ok"] is True
+        assert created["booked"] is True
+        spoken_confirmation = booking_success_speech(created)
+        await live.append_transcript("assistant", spoken_confirmation)
+
+        live.update_voice_state(
+            intent="booking",
+            service=created["service"],
+            staff=created.get("staff"),
+            starts_at=created["starts_at"],
+            customer_name=created["customer_name"],
+            customer_phone=created["customer_phone"],
+            confirmed=True,
+            last_tool="book_appointment",
+            last_tool_ok=True,
+        )
+        live.set_resolution(
+            "booked", f"Booked {created['customer_name']} for {created['starts_at']}."
+        )
+        await live.finish()
+
+        appointments = await AppointmentRepository(db, live.tenant_id).list()
+        assert len(appointments) == 1
+        appointment = appointments[0]
+        assert appointment.call_id == live.call_id
+        assert appointment.customer_name == "Jane Doe"
+        assert appointment.customer_phone == "0213333333"
+        assert appointment.starts_at.replace(tzinfo=UTC) == datetime.fromisoformat(
+            created["starts_at"]
+        ).astimezone(UTC)
+        assert appointment.status == "booked"
+
+        call = await CallRepository(db, live.tenant_id).get(live.call_id)
+        summary = await CallRepository(db, live.tenant_id).summary(live.call_id)
+        assert call is not None
+        assert call.status == "completed"
+        assert call.outcome == "booked"
+        assert summary is not None
+        assert summary.outcome == call.outcome
+        assert "Jane Doe" in summary.summary_text
+
+        from sqlalchemy import select
+
+        from database.models import TranscriptMessage
+
+        transcript_result = await db.execute(
+            select(TranscriptMessage)
+            .where(TranscriptMessage.call_id == live.call_id)
+            .order_by(TranscriptMessage.sequence_number)
+        )
+        transcript = list(transcript_result.scalars())
+        assert [row.sequence_number for row in transcript] == list(range(1, len(transcript) + 1))
+        assert transcript[-3].speaker == "assistant"
+        assert transcript[-3].text == confirmation
+        assert transcript[-2].speaker == "caller"
+        assert transcript[-2].text == "Yes, that's correct."
+        assert transcript[-1].speaker == "assistant"
+        assert transcript[-1].text == spoken_confirmation
+        assert "booked" in transcript[-1].text.casefold()
+    finally:
         await db.close()
 
 
