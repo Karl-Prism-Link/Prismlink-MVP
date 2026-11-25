@@ -1568,7 +1568,8 @@ async def run_bot(
         logger.info("PRISM LINK voice client connected for tenant {}", tenant.slug)
         await call_session.start()
         greeting = build_voice_greeting(tenant)
-        await call_session.append_transcript("assistant", greeting)
+        # The assistant-turn-stopped handler persists this spoken greeting.
+        # Persisting it here as well creates a duplicate transcript entry.
         await worker.queue_frames([TTSSpeakFrame(text=greeting, append_to_context=True)])
 
     @user_aggregator.event_handler("on_user_turn_stopped")
