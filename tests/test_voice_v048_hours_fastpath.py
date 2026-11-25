@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from services.voice.salon_enquiries import (
     business_hours_summary_speech,
+    has_consequential_salon_action,
     is_business_hours_question,
     is_open_now_question,
     is_price_question,
@@ -156,3 +157,36 @@ def test_common_enquiry_resolves_price_clarification_before_booking_fastpath():
     enquiry_handler = source[start:end]
     assert "is_price_service_clarification(" in enquiry_handler
     assert "if is_price_question(latest_user) or price_service_clarification:" in enquiry_handler
+
+
+def test_price_fastpath_yields_when_caller_also_requests_an_action():
+    mixed_requests = (
+        "What does a Men's Cut cost, and cancel my appointment?",
+        "How much is a Women's Cut, and can you cancel my booking?",
+        "What's the price of a haircut? I also need to reschedule my appointment.",
+        "How much is a men's cut and book me in for Friday?",
+        "Women's Cut, and please cancel my appointment.",
+    )
+    for utterance in mixed_requests:
+        assert has_consequential_salon_action(utterance), utterance
+
+
+def test_price_fastpath_keeps_pure_enquiries_and_policy_questions():
+    ordinary_enquiries = (
+        "How much is the men's haircut?",
+        "What does a women's cut cost?",
+        "What is your cancellation policy?",
+        "How much does it cost to cancel?",
+    )
+    for utterance in ordinary_enquiries:
+        assert not has_consequential_salon_action(utterance), utterance
+
+
+def test_common_enquiry_price_fastpath_yields_to_mixed_action_intents():
+    from pathlib import Path
+
+    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    start = source.index("async def _handle_common_enquiry")
+    end = source.index("async def _handle_routing_and_message", start)
+    enquiry_handler = source[start:end]
+    assert "and not has_consequential_salon_action(latest_user)" in enquiry_handler
