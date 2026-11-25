@@ -78,6 +78,7 @@ from services.voice.runtime_control import (
     compact_context_messages,
     is_generic_booking_request,
     is_rate_limit_error,
+    reset_stale_appointment_for_new_booking,
     select_voice_tool_schemas,
 )
 from services.voice.safety import (
@@ -391,6 +392,8 @@ async def run_bot(
                     latest_user_text=latest_user,
                     after_tool_result=after_tool_result,
                 )
+                if decision.reason == "consequential_action_request":
+                    reset_stale_appointment_for_new_booking(call_session, latest_user)
                 model = (
                     settings.groq_fast_model
                     if decision.tier is ModelTier.FAST

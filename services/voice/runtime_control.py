@@ -190,10 +190,28 @@ def is_generic_booking_request(text: str) -> bool:
         r"\b(?:book|make|need|want|get)\s+(?:me\s+)?(?:in\s+)?(?:an?\s+)?appointment\b",
         r"\bi\s+book\s+(?:in\s+)?(?:an?\s+)?appointment\b",
         r"\bi\s+(?:need|want|would\s+like)\s+(?:to\s+)?(?:book|make)\b",
+        r"\bi(?:'d|\s+would)\s+like\s+to\s+book\b",
+        r"\bbook\s+(?:one|a|an)\s+(?:[\w'-]+(?:\s+[\w'-]+){0,2})",
         r"\bbook\s+me\s+in\b",
         r"\b(?:book|make)\s+(?:an?\s+)?booking\b",
     )
     return any(re.search(pattern, lowered, re.I) for pattern in patterns)
+
+
+def reset_stale_appointment_for_new_booking(call_session: Any, latest_user_text: str) -> bool:
+    """Drop a previous management selection when the caller clearly starts a new booking."""
+    if not is_generic_booking_request(latest_user_text):
+        return False
+
+    state = call_session.voice_state
+    state.intent = "booking"
+    state.appointment_id = None
+    state.starts_at = None
+    state.confirmed = False
+    call_session.clear_prepared_booking()
+    call_session.clear_prepared_reschedule()
+    call_session.clear_prepared_cancel()
+    return True
 
 
 def select_latest_caller_text(

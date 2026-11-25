@@ -8,7 +8,10 @@ from pipecat.processors.aggregators.llm_context import LLMContext
 
 from services.voice.confirmation import handle_confirmation_turn
 from services.voice.model_router import route_voice_turn
-from services.voice.runtime_control import select_voice_tool_schemas
+from services.voice.runtime_control import (
+    reset_stale_appointment_for_new_booking,
+    select_voice_tool_schemas,
+)
 from services.voice.tool_handlers import create_voice_tool_handlers
 from services.voice.turn_handlers import latest_caller_text_from_frame
 
@@ -726,3 +729,43 @@ def test_current_pipecat_cancel_turn_overrides_stale_booking_tool_scope():
     assert "cancel_appointment" in names
     assert "book_appointment" in names
     assert "reschedule_appointment" in names
+
+
+def test_new_booking_turn_clears_stale_management_appointment_selection():
+    session = FakeSession()
+    session.voice_state.intent = "appointment_management"
+    session.voice_state.appointment_id = "apt-previous"
+    session.voice_state.starts_at = "2026-12-04T11:00:00+13:00"
+    session.voice_state.confirmed = True
+    session.prepare_booking("stale-booking-fingerprint", {"service": "Old Service"})
+    session.prepare_reschedule("stale-reschedule-fingerprint")
+    session.prepare_cancel("stale-cancel-fingerprint")
+
+    reset = reset_stale_appointment_for_new_booking(
+        session, "How much is a men's cut? I'd like to book one for Friday."
+    )
+
+    assert reset is True
+    assert session.voice_state.intent == "booking"
+    assert session.voice_state.appointment_id is None
+    assert session.voice_state.starts_at is None
+    assert session.voice_state.confirmed is False
+    assert session.has_prepared_booking is False
+    assert session.has_prepared_reschedule is False
+    assert session.has_prepared_cancel is False
+
+
+def test_management_turn_does_not_clear_selected_appointment():
+    session = FakeSession()
+    session.voice_state.intent = "appointment_management"
+    session.voice_state.appointment_id = "apt-previous"
+    session.prepare_reschedule("active-reschedule-fingerprint")
+
+    reset = reset_stale_appointment_for_new_booking(
+        session, "Please reschedule my appointment to Friday."
+    )
+
+    assert reset is False
+    assert session.voice_state.intent == "appointment_management"
+    assert session.voice_state.appointment_id == "apt-previous"
+    assert session.has_prepared_reschedule is True
