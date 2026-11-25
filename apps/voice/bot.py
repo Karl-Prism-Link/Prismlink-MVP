@@ -390,24 +390,22 @@ async def run_bot(
                 if after_tool_result and not decision.use_tools:
                     params["messages"] = flatten_tool_result_messages(messages)
                 params["model"] = model
+                original_tool_count = len(params.get("tools") or [])
                 if decision.use_tools:
-                    original_tool_count = len(params.get("tools") or [])
                     params["tools"] = select_voice_tool_schemas(
                         params.get("tools") or [],
                         intent=call_session.voice_state.intent,
                         routing_reason=decision.reason,
                     )
-                    selected_tool_count = len(params["tools"])
-                    if selected_tool_count < original_tool_count:
-                        logger.info(
-                            "PRISM LINK LLM tools scoped intent={} selected={} total={}",
-                            call_session.voice_state.intent,
-                            selected_tool_count,
-                            original_tool_count,
-                        )
                 if not decision.use_tools:
                     params.pop("tools", None)
                     params.pop("tool_choice", None)
+                selected_tool_names = [
+                    str(tool.get("function", {}).get("name"))
+                    for tool in params.get("tools") or []
+                    if isinstance(tool, dict) and isinstance(tool.get("function"), dict)
+                ]
+                selected_tool_count = len(selected_tool_names)
                 if model.startswith("openai/gpt-oss-"):
                     extra_body = dict(params.get("extra_body") or {})
                     extra_body.update(
@@ -421,11 +419,21 @@ async def run_bot(
                         }
                     )
                     params["extra_body"] = extra_body
+                tool_scope = (
+                    "none"
+                    if not decision.use_tools
+                    else "scoped"
+                    if selected_tool_count < original_tool_count
+                    else "full"
+                )
                 logger.info(
-                    "PRISM LINK LLM route={} model={} tools={} reason={}",
+                    "PRISM LINK LLM route={} model={} tool_scope={} tool_count={} "
+                    "tool_names={} reason={}",
                     decision.tier.value,
                     model,
-                    "full" if decision.use_tools else "none",
+                    tool_scope,
+                    selected_tool_count,
+                    ",".join(selected_tool_names) or "none",
                     decision.reason,
                 )
                 return params
