@@ -208,6 +208,7 @@ def reset_stale_appointment_for_new_booking(call_session: Any, latest_user_text:
     state.appointment_id = None
     state.starts_at = None
     state.confirmed = False
+    call_session.clear_voice_state_fields("service", "staff", "caller_time_phrase")
     call_session.clear_prepared_booking()
     call_session.clear_prepared_reschedule()
     call_session.clear_prepared_cancel()
