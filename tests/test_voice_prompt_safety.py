@@ -1,6 +1,9 @@
 from types import SimpleNamespace
 
-from apps.voice.prompt import build_voice_system_prompt
+from apps.voice.prompt import (
+    build_voice_reschedule_system_prompt,
+    build_voice_system_prompt,
+)
 
 
 def test_system_prompt_forbids_medical_advice_and_repetitive_out_of_scope_refusals():
@@ -32,3 +35,16 @@ def test_system_prompt_recovers_naturally_from_incomplete_speech():
         "Only describe a connection or service problem when the runtime explicitly reports a technical failure"
         in prompt
     )
+
+
+def test_reschedule_prompt_is_compact_and_preserves_safety_and_confirmation():
+    prompt = build_voice_reschedule_system_prompt(
+        SimpleNamespace(name="Luxe Hair & Beauty", timezone="Pacific/Auckland")
+    )
+    assert len(prompt) < 5000
+    assert "Caller ID is not verification" in prompt
+    assert "Use find_appointments" in prompt
+    assert "use check_availability" in prompt
+    assert "fresh, explicit yes" in prompt
+    assert "Never disclose another customer's appointment" in prompt
+    assert "do not claim success" in prompt

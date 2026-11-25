@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from typing import Any
 from uuid import uuid4
 
 from loguru import logger
+from openai import APITimeoutError
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
@@ -34,7 +36,11 @@ from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from apps.voice.prompt import build_voice_greeting, build_voice_system_prompt
+from apps.voice.prompt import (
+    build_voice_greeting,
+    build_voice_reschedule_system_prompt,
+    build_voice_system_prompt,
+)
 from core.config import get_settings
 from database.repositories import TenantRepository
 from database.session import DBSession
@@ -268,9 +274,41 @@ async def run_bot(
             async def get_chat_completions(self, context):
                 def request_params():
                     adapter = self.get_llm_adapter()
+                    messages = context.get_messages()
+                    latest_user = next(
+                        (
+                            str(message.get("content") or "")
+                            for message in reversed(messages)
+                            if message.get("role") == "user"
+                        ),
+                        call_session.latest_caller_transcript or "",
+                    )
+                    latest_user_normalized = " ".join(latest_user.casefold().split())
+                    explicit_reschedule = bool(
+                        re.search(
+                            r"\b(reschedul(?:e|ing)|resched|another time|different time|"
+                            r"move (?:it|my appointment)|change (?:it|my appointment))\b",
+                            latest_user_normalized,
+                        )
+                    )
+                    explicit_new_intent = bool(
+                        re.search(
+                            r"\b(book|booking|cancel|message|hours|open|closing|close|"
+                            r"price|cost|address|parking|services?|staff|speak to)\b",
+                            latest_user_normalized,
+                        )
+                    )
+                    reschedule_turn = explicit_reschedule or (
+                        call_session.voice_state.intent == "reschedule" and not explicit_new_intent
+                    )
+                    system_instruction = (
+                        build_voice_reschedule_system_prompt(tenant)
+                        if reschedule_turn
+                        else self._settings.system_instruction
+                    )
                     return adapter.get_llm_invocation_params(
                         context,
-                        system_instruction=self._settings.system_instruction,
+                        system_instruction=system_instruction,
                         convert_developer_to_user=not self.supports_developer_role,
                     )
 
@@ -337,9 +375,21 @@ async def run_bot(
                     estimate,
                     round(wait_seconds * 1000),
                 )
-                # Reuse Pipecat's provider implementation for timeout and SDK retry
-                # handling after the request has been admitted.
-                return await super().get_chat_completions(context)
+                # Send the exact parameters admitted above. Calling the base
+                # implementation here would rebuild messages from the service's
+                # full default system prompt, invalidating the compact-prompt
+                # estimate and recreating the TPM rejection this path prevents.
+                self._log_llm_response(context)
+                if self._retry_on_timeout:
+                    try:
+                        return await asyncio.wait_for(
+                            self._client.chat.completions.create(**params),
+                            timeout=self._retry_timeout_secs,
+                        )
+                    except (TimeoutError, APITimeoutError):
+                        logger.debug("{}: Retrying chat completion after provider timeout", self)
+                        return await self._client.chat.completions.create(**params)
+                return await self._client.chat.completions.create(**params)
 
             def create_client(
                 self,
