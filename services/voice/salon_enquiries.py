@@ -71,16 +71,16 @@ def is_price_question(text: str | None) -> bool:
 
 
 _ACTION_REQUEST_RE = re.compile(
-    r"\\b(?:"
-    r"cancel(?:\\s+(?:my|the|it|that|(?:an?\\s+)?appointment|booking))?"
-    r"|please\\s+cancel|i\\s+(?:need|want|would\\s+like)\\s+to\\s+cancel"
-    r"|can\\s+you\\s+cancel|reschedul(?:e|ing)"
-    r"|move\\s+(?:my|the)\\s+(?:appointment|booking)"
-    r"|change\\s+(?:my|the)\\s+(?:appointment|booking)"
-    r"|book\\s+(?:me\\s+)?(?:in|an?\\s+appointment)"
-    r"|make\\s+(?:an?\\s+)?booking|schedule\\s+(?:an?\\s+)?appointment"
-    r"|leave\\s+(?:a\\s+)?message|take\\s+(?:a\\s+)?message"
-    r")\\b",
+    r"\b(?:"
+    r"cancel(?:\s+(?:my|the|it|that|(?:an?\s+)?appointment|booking))?"
+    r"|please\s+cancel|i\s+(?:need|want|would\s+like)\s+to\s+cancel"
+    r"|can\s+you\s+cancel|reschedul(?:e|ing)"
+    r"|move\s+(?:my|the)\s+(?:appointment|booking)"
+    r"|change\s+(?:my|the)\s+(?:appointment|booking)"
+    r"|book\s+(?:me\s+)?(?:in|an?\s+appointment)"
+    r"|make\s+(?:an?\s+)?booking|schedule\s+(?:an?\s+)?appointment"
+    r"|leave\s+(?:a\s+)?message|take\s+(?:a\s+)?message"
+    r")\b",
     re.I,
 )
 
