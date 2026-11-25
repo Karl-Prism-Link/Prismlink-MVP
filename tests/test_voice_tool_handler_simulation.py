@@ -7,6 +7,8 @@ from pipecat.frames.frames import LLMContextFrame
 from pipecat.processors.aggregators.llm_context import LLMContext
 
 from services.voice.confirmation import handle_confirmation_turn
+from services.voice.model_router import route_voice_turn
+from services.voice.runtime_control import select_voice_tool_schemas
 from services.voice.tool_handlers import create_voice_tool_handlers
 from services.voice.turn_handlers import latest_caller_text_from_frame
 
@@ -573,3 +575,100 @@ async def test_complete_pipecat_reschedule_journey_requires_exact_bare_confirmat
     else:
         assert session.mutations == []
         assert session.voice_state.confirmed is False
+
+
+def test_current_pipecat_turn_overrides_stale_enquiry_tool_scope():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    # The session still says enquiry because the caller-turn callback has not
+    # updated it yet; Pipecat has already delivered the new context frame.
+    stale_session_intent = "enquiry"
+    frame = LLMContextFrame(
+        LLMContext(
+            messages=[
+                {
+                    "role": "user",
+                    "content": "What does a women's cut cost, and can you book me in?",
+                }
+            ]
+        )
+    )
+    latest_user = next(
+        message["content"]
+        for message in reversed(frame.context.get_messages())
+        if message.get("role") == "user"
+    )
+    decision = route_voice_turn(
+        intent=stale_session_intent,
+        service=None,
+        starts_at=None,
+        last_tool="get_salon_information",
+        last_tool_ok=True,
+        confirmed=False,
+        latest_user_text=latest_user,
+    )
+
+    assert decision.reason == "consequential_action_request"
+    selected = select_voice_tool_schemas(
+        tools,
+        intent=stale_session_intent,
+        routing_reason=decision.reason,
+    )
+    names = {tool["function"]["name"] for tool in selected}
+    assert "book_appointment" in names
+    assert "check_availability" in names
+    assert "cancel_appointment" in names
+    assert "reschedule_appointment" in names
+
+
+def test_current_information_only_turn_keeps_narrow_enquiry_scope():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    frame = LLMContextFrame(
+        LLMContext(messages=[{"role": "user", "content": "What is the price of a women's cut?"}])
+    )
+    latest_user = next(
+        message["content"]
+        for message in reversed(frame.context.get_messages())
+        if message.get("role") == "user"
+    )
+    decision = route_voice_turn(
+        intent="enquiry",
+        service=None,
+        starts_at=None,
+        last_tool="get_salon_information",
+        last_tool_ok=True,
+        confirmed=False,
+        latest_user_text=latest_user,
+    )
+    selected = select_voice_tool_schemas(
+        tools,
+        intent="enquiry",
+        routing_reason=decision.reason,
+    )
+
+    assert decision.reason == "salon_enquiry"
+    assert {tool["function"]["name"] for tool in selected} == {
+        "get_salon_information",
+        "take_message",
+    }

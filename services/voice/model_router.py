@@ -29,6 +29,10 @@ _DATE_TIME_RE = re.compile(
     r"one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b",
     re.I,
 )
+_CONSEQUENTIAL_ACTION_RE = re.compile(
+    r"\b(?:book|booking|schedule|reserve|cancel(?:lation)?|reschedul(?:e|ing)|move|change)\b",
+    re.I,
+)
 _CORRECTION_RE = re.compile(
     r"\b(?:actually|instead|correction|correct that|change that|not that|wrong|i meant|"
     r"rather|different|another|resched|cancel|move my appointment|change my appointment)\b",
@@ -93,6 +97,11 @@ def route_voice_turn(
 
     if intent in {"cancel", "reschedule", "appointment_management"}:
         return RoutingDecision(ModelTier.REASONING, "appointment_management", use_tools=True)
+
+    # Current-turn action wording must override a stale enquiry/message intent.
+    # Tool handlers still enforce confirmation and all mutation safety checks.
+    if _CONSEQUENTIAL_ACTION_RE.search(lowered):
+        return RoutingDecision(ModelTier.REASONING, "consequential_action_request", use_tools=True)
 
     if intent in {"message", "routing"}:
         return RoutingDecision(ModelTier.FAST, "message_or_routing", use_tools=True)
