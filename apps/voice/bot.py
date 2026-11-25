@@ -78,6 +78,7 @@ from services.voice.runtime_control import (
     compact_context_messages,
     is_generic_booking_request,
     is_rate_limit_error,
+    select_voice_tool_schemas,
 )
 from services.voice.safety import (
     immediate_emergency_response,
@@ -389,6 +390,20 @@ async def run_bot(
                 if after_tool_result and not decision.use_tools:
                     params["messages"] = flatten_tool_result_messages(messages)
                 params["model"] = model
+                if decision.use_tools:
+                    original_tool_count = len(params.get("tools") or [])
+                    params["tools"] = select_voice_tool_schemas(
+                        params.get("tools") or [],
+                        intent=call_session.voice_state.intent,
+                    )
+                    selected_tool_count = len(params["tools"])
+                    if selected_tool_count < original_tool_count:
+                        logger.info(
+                            "PRISM LINK LLM tools scoped intent={} selected={} total={}",
+                            call_session.voice_state.intent,
+                            selected_tool_count,
+                            original_tool_count,
+                        )
                 if not decision.use_tools:
                     params.pop("tools", None)
                     params.pop("tool_choice", None)

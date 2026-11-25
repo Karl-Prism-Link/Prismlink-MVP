@@ -92,6 +92,59 @@ class RollingModelTokenBudget:
             await asyncio.sleep(min(wait_for_capacity, remaining))
 
 
+_INTENT_TOOL_ALLOWLISTS = {
+    "booking": frozenset(
+        {"get_salon_information", "check_availability", "book_appointment", "take_message"}
+    ),
+    "cancel": frozenset(
+        {"get_salon_information", "find_appointments", "cancel_appointment", "take_message"}
+    ),
+    "reschedule": frozenset(
+        {
+            "get_salon_information",
+            "find_appointments",
+            "check_availability",
+            "reschedule_appointment",
+            "take_message",
+        }
+    ),
+    "appointment_management": frozenset(
+        {
+            "get_salon_information",
+            "find_appointments",
+            "check_availability",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        }
+    ),
+    "message": frozenset({"get_salon_information", "take_message"}),
+    "routing": frozenset({"get_salon_information", "take_message"}),
+}
+
+
+def select_voice_tool_schemas(
+    tools: Sequence[dict[str, Any]], *, intent: str | None
+) -> list[dict[str, Any]]:
+    """Limit each classified turn to tools needed for that workflow.
+
+    Unknown intents retain the complete tool set. Unrecognised schema entries are
+    retained so future/provider tools cannot silently become unavailable.
+    Tool handlers remain the authority for all consequential actions.
+    """
+    allowed = _INTENT_TOOL_ALLOWLISTS.get(str(intent or "unknown").casefold())
+    if allowed is None:
+        return list(tools)
+    known_tools = set().union(*_INTENT_TOOL_ALLOWLISTS.values())
+    selected: list[dict[str, Any]] = []
+    for tool in tools:
+        function = tool.get("function") if isinstance(tool, dict) else None
+        name = function.get("name") if isinstance(function, dict) else None
+        if not name or name not in known_tools or name in allowed:
+            selected.append(tool)
+    return selected
+
+
 def is_rate_limit_error(error_text: str) -> bool:
     text = (error_text or "").lower()
     return (

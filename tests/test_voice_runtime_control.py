@@ -6,6 +6,7 @@ from services.voice.runtime_control import (
     is_generic_booking_request,
     is_rate_limit_error,
     parse_retry_delay_seconds,
+    select_voice_tool_schemas,
 )
 from services.voice.session import VoiceConversationState
 
@@ -152,3 +153,91 @@ def test_local_tpm_budget_error_is_classified_for_voice_fallback():
     )
     assert is_rate_limit_error("429 rate_limit_exceeded from provider")
     assert not is_rate_limit_error("invalid API key")
+
+
+def test_booking_intent_exposes_only_booking_and_safe_message_tools():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    names = [
+        item["function"]["name"] for item in select_voice_tool_schemas(tools, intent="booking")
+    ]
+    assert names == [
+        "get_salon_information",
+        "check_availability",
+        "book_appointment",
+        "take_message",
+    ]
+    assert "cancel_appointment" not in names
+    assert "reschedule_appointment" not in names
+
+
+def test_appointment_management_keeps_required_read_and_mutation_tools():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    for intent, expected in {
+        "cancel": {"find_appointments", "cancel_appointment"},
+        "reschedule": {"find_appointments", "check_availability", "reschedule_appointment"},
+    }.items():
+        names = {
+            item["function"]["name"] for item in select_voice_tool_schemas(tools, intent=intent)
+        }
+        assert expected <= names
+
+
+def test_unknown_intent_keeps_all_tools_and_unrecognised_schema_entries():
+    tools = [
+        {"type": "function", "function": {"name": "book_appointment"}},
+        {"type": "function", "function": {"name": "future_tool"}},
+        {"type": "custom", "custom": {"name": "provider_extension"}},
+    ]
+    assert select_voice_tool_schemas(tools, intent="unknown") == tools
+    assert select_voice_tool_schemas(tools, intent="booking") == tools
+
+
+def test_booking_tool_scoping_reduces_admitted_request_estimate():
+    budget = RollingModelTokenBudget(tokens_per_minute=7000)
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": name, "description": "workflow details " * 80},
+        }
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    params = {
+        "messages": [{"role": "user", "content": "I want to book a haircut"}],
+        "tools": tools,
+        "max_completion_tokens": 256,
+    }
+    original_estimate = budget.estimate_request_tokens(params)
+    params["tools"] = select_voice_tool_schemas(tools, intent="booking")
+    scoped_estimate = budget.estimate_request_tokens(params)
+    assert scoped_estimate < original_estimate
+    assert len(params["tools"]) == 4
