@@ -72,7 +72,7 @@ def is_price_question(text: str | None) -> bool:
 
 _ACTION_REQUEST_RE = re.compile(
     r"\b(?:"
-    r"cancel(?:\s+(?:my|the|it|that|(?:an?\s+)?appointment|booking))?"
+    r"cancel\s+(?:my|the|it|that|(?:an?\s+)?appointment|booking)"
     r"|please\s+cancel|i\s+(?:need|want|would\s+like)\s+to\s+cancel"
     r"|can\s+you\s+cancel|reschedul(?:e|ing)"
     r"|move\s+(?:my|the)\s+(?:appointment|booking)"
