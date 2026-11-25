@@ -687,7 +687,9 @@ async def run_bot(
                     last_tool=state.last_tool,
                 )
             )
-            if (is_price_question(latest_user) or price_service_clarification) and not has_consequential_salon_action(latest_user):
+            has_price_intent = is_price_question(latest_user) or price_service_clarification
+            has_other_action = has_consequential_salon_action(latest_user)
+            if has_price_intent and not has_other_action:
                 # Treat pricing as a separate enquiry before branching on whether a
                 # configured price exists. Never leave a prepared action armed, and
                 # never record a message request until a message is actually submitted.
