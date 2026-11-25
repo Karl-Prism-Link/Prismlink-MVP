@@ -168,6 +168,7 @@ def test_price_fastpath_yields_when_caller_also_requests_an_action():
         "Women's Cut, and please cancel my appointment.",
     )
     for utterance in mixed_requests:
+        assert is_price_question(utterance) or "Women's Cut" in utterance, utterance
         assert has_consequential_salon_action(utterance), utterance
 
 
@@ -189,4 +190,4 @@ def test_common_enquiry_price_fastpath_yields_to_mixed_action_intents():
     start = source.index("async def _handle_common_enquiry")
     end = source.index("async def _handle_routing_and_message", start)
     enquiry_handler = source[start:end]
-    assert "and not has_consequential_salon_action(latest_user)" in enquiry_handler
+    assert "has_price_intent and not has_other_action" in enquiry_handler
