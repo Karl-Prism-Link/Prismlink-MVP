@@ -108,11 +108,14 @@ def test_prepared_message_bare_yes_is_deterministic():
 
 
 def test_v046_runtime_has_deterministic_routing_and_message_paths():
-    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    root = Path(__file__).parents[1]
+    source = (root / "apps" / "voice" / "bot.py").read_text()
+    confirmation = (root / "services" / "voice" / "confirmation.py").read_text()
     assert "async def _handle_routing_and_message" in source
     assert "PRISM LINK deterministic routing fallback" in source
     assert "PRISM LINK deterministic message intent fastpath" in source
-    assert "has_prepared_message=call_session.has_prepared_message" in source
+    assert "handle_confirmation_turn(" in source
+    assert "has_prepared_message=call_session.has_prepared_message" in confirmation
 
 
 async def test_message_tool_requires_prepare_and_fresh_yes(client):

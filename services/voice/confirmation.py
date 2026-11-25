@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from services.voice.contact import is_explicit_affirmation, is_explicit_rejection
+from services.voice.model_router import confirmation_fastpath_action
 from services.voice.speech_cleanup import (
     booking_success_speech,
     cancellation_success_speech,
@@ -129,3 +131,28 @@ async def execute_confirmation_action(
         await speak("Okay, I won't cancel it. Is there anything else I can help with?", direction)
         return True
     return False
+
+
+async def handle_confirmation_turn(
+    latest_user_text: str,
+    *,
+    call_session: Any,
+    tools: Any,
+    speak: Callable[[str, Any], Awaitable[None]],
+    direction: Any,
+) -> bool:
+    """Route a caller transcript through the production yes/no gate and dispatcher."""
+    action = confirmation_fastpath_action(
+        latest_user_text=latest_user_text,
+        has_prepared_booking=call_session.has_prepared_booking,
+        has_prepared_reschedule=call_session.has_prepared_reschedule,
+        has_prepared_cancel=call_session.has_prepared_cancel,
+        has_prepared_message=call_session.has_prepared_message,
+        is_affirmation=is_explicit_affirmation(latest_user_text),
+        is_rejection=is_explicit_rejection(latest_user_text),
+    )
+    if action is None:
+        return False
+    return await execute_confirmation_action(
+        action, call_session=call_session, tools=tools, speak=speak, direction=direction
+    )

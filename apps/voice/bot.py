@@ -40,7 +40,7 @@ from database.repositories import TenantRepository
 from database.session import DBSession
 from monitoring import record_voice_turn_latency
 from services.service_names import configured_service_name_from_speech
-from services.voice.confirmation import execute_confirmation_action
+from services.voice.confirmation import handle_confirmation_turn
 from services.voice.contact import (
     extract_booking_day_reference,
     extract_booking_name_candidate,
@@ -69,7 +69,6 @@ from services.voice.message_routing import (
 )
 from services.voice.model_router import (
     ModelTier,
-    confirmation_fastpath_action,
     flatten_tool_result_messages,
     route_voice_turn,
 )
@@ -1239,28 +1238,14 @@ async def run_bot(
             if await self._handle_booking_contact_capture(latest_user, direction):
                 return
 
-            action = confirmation_fastpath_action(
-                latest_user_text=latest_user,
-                has_prepared_booking=call_session.has_prepared_booking,
-                has_prepared_reschedule=call_session.has_prepared_reschedule,
-                has_prepared_cancel=call_session.has_prepared_cancel,
-                has_prepared_message=call_session.has_prepared_message,
-                is_affirmation=is_explicit_affirmation(latest_user),
-                is_rejection=is_explicit_rejection(latest_user),
-            )
-            if action is None:
-                await self.push_frame(frame, direction)
-                return
-
-            logger.info("PRISM LINK deterministic confirmation fastpath action={}", action)
-
-            if await execute_confirmation_action(
-                action,
+            if await handle_confirmation_turn(
+                latest_user,
                 call_session=call_session,
                 tools=tools,
                 speak=self._speak,
                 direction=direction,
             ):
+                logger.info("PRISM LINK deterministic confirmation fastpath handled")
                 return
 
             await self.push_frame(frame, direction)

@@ -3,10 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from pipecat.frames.frames import LLMContextFrame
+from pipecat.processors.aggregators.llm_context import LLMContext
 
-from services.voice.confirmation import execute_confirmation_action
+from services.voice.confirmation import execute_confirmation_action, handle_confirmation_turn
 from services.voice.contact import is_explicit_affirmation, is_explicit_rejection
 from services.voice.model_router import confirmation_fastpath_action
+from services.voice.turn_handlers import latest_caller_text_from_frame
 
 
 class FakeConfirmationSession:
@@ -28,6 +31,8 @@ class FakeConfirmationSession:
             "message": prepared == "message",
         }
         self.message_phone_cleared = False
+        self.recent_caller_transcripts = []
+        self.transcript_appends = []
 
     @property
     def has_prepared_booking(self):
@@ -44,6 +49,11 @@ class FakeConfirmationSession:
     @property
     def has_prepared_message(self):
         return self.prepared["message"]
+
+    async def append_transcript(self, role, text):
+        self.transcript_appends.append((role, text))
+        if role == "caller":
+            self.recent_caller_transcripts.append(text)
 
     def update_voice_state(self, **changes):
         for key, value in changes.items():
@@ -223,3 +233,78 @@ def test_non_bare_confirmation_language_is_not_committed_by_fastpath(text):
     session = FakeConfirmationSession("booking")
 
     assert _selected_action(session, text) is None
+
+
+async def _run_real_context_confirmation(utterance, prepared):
+    session = FakeConfirmationSession(prepared)
+    tools = FakeConfirmationTools()
+    spoken = []
+    context = LLMContext(messages=[{"role": "user", "content": utterance}])
+    frame = LLMContextFrame(context)
+    latest_user = await latest_caller_text_from_frame(frame, session)
+
+    async def speak(text, direction):
+        spoken.append((text, direction))
+
+    handled = await handle_confirmation_turn(
+        latest_user,
+        call_session=session,
+        tools=tools,
+        speak=speak,
+        direction="downstream",
+    )
+    return latest_user, handled, session, tools, spoken
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("prepared", "expected_tool"),
+    [
+        ("booking", "book_appointment"),
+        ("reschedule", "reschedule_appointment"),
+        ("cancel", "cancel_appointment"),
+        ("message", "take_message"),
+    ],
+)
+async def test_real_pipecat_yes_frame_reaches_correct_prepared_confirmation(
+    prepared, expected_tool
+):
+    latest, handled, session, tools, spoken = await _run_real_context_confirmation("yes", prepared)
+
+    assert latest == "yes"
+    assert handled is True
+    assert tools.calls[0][0] == expected_tool
+    assert len(tools.calls) == 1
+    assert session.transcript_appends == [("caller", "yes")]
+    assert session.voice_state.confirmed is True
+    assert spoken and spoken[0][1] == "downstream"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("prepared", ["booking", "reschedule", "cancel", "message"])
+async def test_real_pipecat_no_frame_never_calls_a_mutation(prepared):
+    latest, handled, session, tools, spoken = await _run_real_context_confirmation("no", prepared)
+
+    assert latest == "no"
+    assert handled is True
+    assert tools.calls == []
+    assert not any(session.prepared.values())
+    assert session.voice_state.confirmed is False
+    assert session.transcript_appends == [("caller", "no")]
+    assert spoken
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("utterance", ["no, make it four", "yes, but change the time"])
+async def test_real_pipecat_mixed_confirmation_frame_is_not_auto_committed(utterance):
+    latest, handled, session, tools, spoken = await _run_real_context_confirmation(
+        utterance, "booking"
+    )
+
+    assert latest == utterance
+    assert handled is False
+    assert tools.calls == []
+    assert session.prepared["booking"] is True
+    assert session.voice_state.confirmed is False
+    assert session.transcript_appends == [("caller", utterance)]
+    assert spoken == []
