@@ -70,6 +70,26 @@ def is_price_question(text: str | None) -> bool:
     return bool(_PRICE_RE.search(str(text or "")))
 
 
+_ACTION_REQUEST_RE = re.compile(
+    r"\\b(?:"
+    r"cancel(?:\\s+(?:my|the|it|that|(?:an?\\s+)?appointment|booking))?"
+    r"|please\\s+cancel|i\\s+(?:need|want|would\\s+like)\\s+to\\s+cancel"
+    r"|can\\s+you\\s+cancel|reschedul(?:e|ing)"
+    r"|move\\s+(?:my|the)\\s+(?:appointment|booking)"
+    r"|change\\s+(?:my|the)\\s+(?:appointment|booking)"
+    r"|book\\s+(?:me\\s+)?(?:in|an?\\s+appointment)"
+    r"|make\\s+(?:an?\\s+)?booking|schedule\\s+(?:an?\\s+)?appointment"
+    r"|leave\\s+(?:a\\s+)?message|take\\s+(?:a\\s+)?message"
+    r")\\b",
+    re.I,
+)
+
+
+def has_consequential_salon_action(text: str | None) -> bool:
+    """Return True when a turn includes a requested booking/management/message action."""
+    return bool(_ACTION_REQUEST_RE.search(str(text or "")))
+
+
 def is_price_service_clarification(
     latest_user: str | None,
     recent_caller_transcripts: Iterable[str],
