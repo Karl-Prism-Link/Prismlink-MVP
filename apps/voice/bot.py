@@ -91,6 +91,7 @@ from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     is_business_hours_question,
     is_open_now_question,
+    has_consequential_salon_action,
     is_price_question,
     is_price_service_clarification,
     open_now_speech,
@@ -686,7 +687,7 @@ async def run_bot(
                     last_tool=state.last_tool,
                 )
             )
-            if is_price_question(latest_user) or price_service_clarification:
+            if (is_price_question(latest_user) or price_service_clarification) and not has_consequential_salon_action(latest_user):
                 # Treat pricing as a separate enquiry before branching on whether a
                 # configured price exists. Never leave a prepared action armed, and
                 # never record a message request until a message is actually submitted.
