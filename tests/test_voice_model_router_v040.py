@@ -89,6 +89,18 @@ def test_management_always_uses_reasoning_model():
     assert result.use_tools is True
 
 
+def test_verified_reschedule_slot_uses_fast_model_with_authoritative_tools():
+    result = decision(
+        intent="reschedule",
+        last_tool="find_appointments",
+        last_tool_ok=True,
+        latest_user_text="I want to move it to Tuesday, 03:00.",
+    )
+    assert result.tier is ModelTier.FAST
+    assert result.reason == "verified_reschedule_slot"
+    assert result.use_tools is True
+
+
 def test_management_tool_success_readback_uses_fast_model_without_tools():
     result = decision(
         intent="reschedule",

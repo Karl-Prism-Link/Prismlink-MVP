@@ -93,6 +93,19 @@ def route_voice_turn(
             return RoutingDecision(ModelTier.FAST, "management_tool_readback", use_tools=False)
         return RoutingDecision(ModelTier.FAST, "tool_result_readback", use_tools=False)
 
+    # Once an appointment has been found and identity-verified, interpreting
+    # the caller's proposed replacement slot is a constrained extraction task.
+    # The availability tool remains authoritative and resolves the spoken date
+    # and time; the mutation still requires a separate explicit confirmation.
+    if (
+        intent == "reschedule"
+        and last_tool == "find_appointments"
+        and last_tool_ok is True
+        and _DATE_TIME_RE.search(lowered)
+        and re.search(r"\b(?:move|change|another|different|reschedul)\b", lowered)
+    ):
+        return RoutingDecision(ModelTier.FAST, "verified_reschedule_slot", use_tools=True)
+
     if confirmed and _SIMPLE_SOCIAL_RE.match(text):
         return RoutingDecision(ModelTier.FAST, "post_action_social", use_tools=False)
 
