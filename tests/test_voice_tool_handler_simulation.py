@@ -672,3 +672,57 @@ def test_current_information_only_turn_keeps_narrow_enquiry_scope():
         "get_salon_information",
         "take_message",
     }
+
+
+def test_current_pipecat_cancel_turn_overrides_stale_booking_tool_scope():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    # The LLM context frame for the new cancellation arrives before the
+    # user-turn callback updates the session's previous booking intent.
+    stale_session_intent = "booking"
+    frame = LLMContextFrame(
+        LLMContext(
+            messages=[
+                {
+                    "role": "user",
+                    "content": "What is the cancellation policy, and cancel my appointment please.",
+                }
+            ]
+        )
+    )
+    latest_user = next(
+        message["content"]
+        for message in reversed(frame.context.get_messages())
+        if message.get("role") == "user"
+    )
+    decision = route_voice_turn(
+        intent=stale_session_intent,
+        service=None,
+        starts_at=None,
+        last_tool="check_availability",
+        last_tool_ok=True,
+        confirmed=False,
+        latest_user_text=latest_user,
+    )
+
+    assert decision.reason == "consequential_action_request"
+    selected = select_voice_tool_schemas(
+        tools,
+        intent=stale_session_intent,
+        routing_reason=decision.reason,
+    )
+    names = {tool["function"]["name"] for tool in selected}
+    assert "find_appointments" in names
+    assert "cancel_appointment" in names
+    assert "book_appointment" in names
+    assert "reschedule_appointment" in names

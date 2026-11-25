@@ -137,13 +137,11 @@ def select_voice_tool_schemas(
     Tool handlers remain the authority for all consequential actions.
     """
     scope_intent = str(intent or "unknown").casefold()
-    if (
-        scope_intent in {"unknown", "enquiry", "message", "routing"}
-        and routing_reason == "consequential_action_request"
-    ):
-        # The session intent may still describe the previous turn when Pipecat
-        # builds the LLM context frame. Never let that stale narrow scope hide
-        # tools requested by the current caller turn.
+    if routing_reason == "consequential_action_request":
+        # The session intent may still describe any previous workflow (including
+        # booking) when Pipecat builds the LLM context frame. Derive tool scope
+        # from the current caller turn so management actions retain their tools.
+        # Consequential handlers still enforce confirmation and mutation safety.
         scope_intent = "unknown"
     if scope_intent == "unknown" and routing_reason == "salon_enquiry":
         scope_intent = "enquiry"
