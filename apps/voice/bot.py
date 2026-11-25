@@ -89,9 +89,9 @@ from services.voice.safety import (
 )
 from services.voice.salon_enquiries import (
     business_hours_summary_speech,
+    has_consequential_salon_action,
     is_business_hours_question,
     is_open_now_question,
-    has_consequential_salon_action,
     is_price_question,
     is_price_service_clarification,
     open_now_speech,
