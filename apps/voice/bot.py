@@ -320,6 +320,15 @@ async def run_bot(
                         original_estimate,
                         estimate,
                     )
+                logger.info(
+                    "PRISM LINK Groq TPM request model={} estimated_tokens={} budget_tokens={} "
+                    "tool_count={} trimmed_turns={}",
+                    model,
+                    estimate,
+                    _groq_token_budget.tokens_per_minute,
+                    len(params.get("tools") or []),
+                    trimmed_turns,
+                )
                 wait_seconds = await _groq_token_budget.reserve(model, estimate)
                 logger.info(
                     "PRISM LINK Groq TPM admission model={} estimated_tokens={} wait_ms={}",
