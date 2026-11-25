@@ -3,14 +3,20 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from pipecat.frames.frames import LLMContextFrame
+from pipecat.processors.aggregators.llm_context import LLMContext
 
-from services.voice.turn_handlers import handle_common_enquiry
+from services.voice.turn_handlers import (
+    handle_common_enquiry,
+    latest_caller_text_from_frame,
+)
 
 
 class FakeCallSession:
     def __init__(self):
         self.voice_state = SimpleNamespace(intent=None, last_tool=None)
         self.recent_caller_transcripts = []
+        self.transcript_appends = []
         self.cleared = []
         self.updates = []
         self.resolutions = []
@@ -31,6 +37,11 @@ class FakeCallSession:
         self.updates.append(changes)
         for key, value in changes.items():
             setattr(self.voice_state, key, value)
+
+    async def append_transcript(self, role, text):
+        self.transcript_appends.append((role, text))
+        if role == "caller":
+            self.recent_caller_transcripts.append(text)
 
     def set_resolution(self, *args):
         self.resolutions.append(args)
@@ -136,3 +147,71 @@ async def test_cancellation_policy_question_is_not_mistaken_for_action():
     assert spoken == []
     assert tools.service_calls == 0
     assert tools.hours_calls == 0
+
+
+async def _run_frame(utterance, *, session=None):
+    session = session or FakeCallSession()
+    tools = FakeTools()
+    spoken = []
+
+    async def speak(message, _direction):
+        spoken.append(message)
+
+    context = LLMContext(messages=[{"role": "user", "content": utterance}])
+    frame = LLMContextFrame(context)
+    latest_user = await latest_caller_text_from_frame(frame, session)
+    handled = await handle_common_enquiry(
+        latest_user,
+        None,
+        call_session=session,
+        tools=tools,
+        configured_service_names=("Women's Cut", "Men's Cut"),
+        tenant=SimpleNamespace(
+            currency="NZD", prices_include_gst=True, timezone="Pacific/Auckland"
+        ),
+        speak=speak,
+    )
+    return latest_user, handled, spoken, session, tools
+
+
+@pytest.mark.asyncio
+async def test_real_pipecat_context_frame_runs_production_price_enquiry_path():
+    latest_user, handled, spoken, session, tools = await _run_frame("How much is a women's cut?")
+
+    assert latest_user == "How much is a women's cut?"
+    assert handled is True
+    assert spoken == ["The Women's Cut is 65 dollars."]
+    assert session.transcript_appends == [("caller", "How much is a women's cut?")]
+    assert tools.service_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_real_pipecat_context_frame_preserves_mixed_action_for_downstream_dispatch():
+    utterance = "How much is a women's cut? Please cancel my appointment."
+    latest_user, handled, spoken, session, tools = await _run_frame(utterance)
+
+    assert latest_user == utterance
+    assert handled is False
+    assert spoken == []
+    assert session.cleared == []
+    assert session.updates == []
+    assert session.transcript_appends == [("caller", utterance)]
+    assert tools.service_calls == 0
+    assert tools.hours_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_real_pipecat_context_frame_does_not_replace_newer_session_transcript():
+    session = FakeCallSession()
+    session.recent_caller_transcripts.extend(
+        ["How much is a women's cut?", "Please cancel my appointment."]
+    )
+    latest_user, handled, spoken, session, tools = await _run_frame(
+        "How much is a women's cut?", session=session
+    )
+
+    assert latest_user == "Please cancel my appointment."
+    assert handled is False
+    assert spoken == []
+    assert session.transcript_appends == []
+    assert tools.service_calls == 0

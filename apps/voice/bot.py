@@ -80,7 +80,6 @@ from services.voice.runtime_control import (
     compact_context_messages,
     is_generic_booking_request,
     is_rate_limit_error,
-    select_latest_caller_text,
 )
 from services.voice.safety import (
     immediate_emergency_response,
@@ -103,7 +102,10 @@ from services.voice.speech_cleanup import (
 )
 from services.voice.stt_context import stt_vocabulary_settings
 from services.voice.tools import VoiceToolset
-from services.voice.turn_handlers import handle_common_enquiry
+from services.voice.turn_handlers import (
+    handle_common_enquiry,
+    latest_caller_text_from_frame,
+)
 
 settings = get_settings()
 
@@ -1158,24 +1160,10 @@ async def run_bot(
                 await self.push_frame(frame, direction)
                 return
 
-            messages = frame.context.get_messages()
-            context_latest_user = next(
-                (
-                    str(message.get("content") or "")
-                    for message in reversed(messages)
-                    if message.get("role") == "user"
-                ),
-                "",
-            )
-            latest_user = select_latest_caller_text(
-                context_latest_user,
-                call_session.recent_caller_transcripts,
-            )
             # Keep the deterministic guard correct even if Pipecat's event callback and
             # LLMContextFrame arrive in either order. Never append a known older context
             # turn over a newer session transcript.
-            if latest_user and latest_user not in call_session.recent_caller_transcripts:
-                await call_session.append_transcript("caller", latest_user)
+            latest_user = await latest_caller_text_from_frame(frame, call_session)
 
             # Immediate safety is a persistent runtime state, not an LLM/context hint.
             # Once active, it is checked before every ordinary workflow and cannot be

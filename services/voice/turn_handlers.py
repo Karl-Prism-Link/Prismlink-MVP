@@ -3,6 +3,7 @@ from __future__ import annotations
 from loguru import logger
 
 from services.service_names import configured_service_name_from_speech
+from services.voice.runtime_control import select_latest_caller_text
 from services.voice.salon_enquiries import (
     business_hours_summary_speech,
     has_consequential_salon_action,
@@ -126,3 +127,23 @@ async def handle_common_enquiry(
     await speak(speech, direction)
     logger.info("PRISM LINK deterministic salon hours fastpath kind={}", enquiry_kind)
     return True
+
+
+async def latest_caller_text_from_frame(frame, call_session) -> str:
+    """Resolve caller text from a Pipecat context frame without routing the turn."""
+    messages = frame.context.get_messages()
+    context_latest_user = next(
+        (
+            str(message.get("content") or "")
+            for message in reversed(messages)
+            if message.get("role") == "user"
+        ),
+        "",
+    )
+    latest_user = select_latest_caller_text(
+        context_latest_user,
+        call_session.recent_caller_transcripts,
+    )
+    if latest_user and latest_user not in call_session.recent_caller_transcripts:
+        await call_session.append_transcript("caller", latest_user)
+    return latest_user

@@ -55,4 +55,8 @@ def test_v044_runtime_contains_direct_datetime_and_social_fastpaths():
     source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
     assert "service_resolved_datetime" in source
     assert "deterministic closing/social fastpath" in source
-    assert "select_latest_caller_text" in source
+    turn_handlers = (
+        Path(__file__).parents[1] / "services" / "voice" / "turn_handlers.py"
+    ).read_text()
+    assert "latest_caller_text_from_frame" in source
+    assert "select_latest_caller_text" in turn_handlers
