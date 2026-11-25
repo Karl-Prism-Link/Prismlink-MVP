@@ -239,3 +239,20 @@ async def test_immediate_safety_blocks_every_voice_tool_at_the_tool_boundary():
     assert session.booking_name_capture_active is False
     assert "immediate_safety_active=true" in session.voice_state_summary
     assert "safety_reason=immediate_emergency" in session.voice_state_summary
+
+    # Later ordinary caller-turn state updates must not clear the safety latch.
+    session.update_voice_state(
+        intent="booking",
+        service="Women's Cut",
+        caller_time_phrase="Friday at 10 am",
+        confirmed=False,
+        last_tool="check_availability",
+    )
+    assert session.immediate_safety_active is True
+    assert session.voice_state.safety_reason == "immediate_emergency"
+
+    blocked_after_update = await tools.book_appointment(
+        "Women's Cut", "2026-11-27T10:00", "Caller", "0211234567", False
+    )
+    assert blocked_after_update["code"] == "IMMEDIATE_SAFETY_ACTIVE"
+    assert session.immediate_safety_active is True
