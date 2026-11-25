@@ -3,8 +3,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from pipecat.frames.frames import LLMContextFrame
+from pipecat.processors.aggregators.llm_context import LLMContext
 
+from services.voice.confirmation import handle_confirmation_turn
 from services.voice.tool_handlers import create_voice_tool_handlers
+from services.voice.turn_handlers import latest_caller_text_from_frame
 
 
 class FakeSession:
@@ -18,6 +22,45 @@ class FakeSession:
         )
         self.transcripts = []
         self.updates = []
+        self._prepared_booking_payload = None
+        self._prepared_booking_fingerprint = None
+        self.mutations = []
+
+    @property
+    def recent_caller_transcripts(self):
+        return tuple(text for role, text in self.transcripts[-8:] if role == "caller")
+
+    @property
+    def latest_caller_transcript(self):
+        return self.recent_caller_transcripts[-1] if self.recent_caller_transcripts else None
+
+    @property
+    def has_prepared_booking(self):
+        return bool(self._prepared_booking_fingerprint and self._prepared_booking_payload)
+
+    @property
+    def has_prepared_reschedule(self):
+        return False
+
+    @property
+    def has_prepared_cancel(self):
+        return False
+
+    @property
+    def has_prepared_message(self):
+        return False
+
+    def prepare_booking(self, fingerprint, payload):
+        self._prepared_booking_fingerprint = fingerprint
+        self._prepared_booking_payload = dict(payload)
+
+    @property
+    def prepared_booking_payload(self):
+        return dict(self._prepared_booking_payload) if self._prepared_booking_payload else None
+
+    def clear_prepared_booking(self):
+        self._prepared_booking_fingerprint = None
+        self._prepared_booking_payload = None
 
     @property
     def booking_spelled_name(self):
@@ -55,7 +98,8 @@ class FakeParams:
 
 
 class FakeTools:
-    def __init__(self):
+    def __init__(self, session=None):
+        self.session = session
         self.calls = []
         self.booking_result = {
             "ok": True,
@@ -105,6 +149,37 @@ class FakeTools:
 
     async def book_appointment(self, *args):
         self.calls.append(("book_appointment", args))
+        if args[4] is True and self.session is not None:
+            prepared = self.session.prepared_booking_payload
+            if prepared is None:
+                return {"ok": False, "booked": False, "code": "BOOKING_PRECHECK_REQUIRED"}
+            self.session.mutations.append(
+                {
+                    "service": prepared["service"],
+                    "starts_at": prepared["starts_at"],
+                    "customer_name": prepared["customer_name"],
+                    "customer_phone": prepared["customer_phone"],
+                }
+            )
+            self.session.clear_prepared_booking()
+            return {
+                **self.booking_result,
+                "service": prepared["service"],
+                "starts_at": prepared["starts_at"],
+                "customer_name": prepared["customer_name"],
+                "customer_phone": prepared["customer_phone"],
+                "booked": True,
+                "ok": True,
+            }
+        if args[4] is False and self.session is not None:
+            payload = {
+                "service": args[0],
+                "starts_at": args[1],
+                "customer_name": args[2],
+                "customer_phone": args[3],
+            }
+            self.session.prepare_booking("prepared-booking-fingerprint", payload)
+            return {"ok": True, "booked": False, "ready_to_confirm": True, **payload}
         return {**self.booking_result, "booked": bool(args[4]), "ok": True}
 
     async def find_appointments(self, *args):
@@ -285,3 +360,84 @@ async def test_reschedule_availability_uses_selected_appointment_not_llm_service
     assert tools.calls[0][1][0] == "apt-2"
     assert session.voice_state.intent == "reschedule"
     assert params.results[0][0]["service"] == "Colour"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("caller_reply", "expected_bookings", "expected_handled", "expected_prepared"),
+    [
+        ("yes", 1, True, False),
+        ("no", 0, True, False),
+        ("yes, but change the time", 0, False, True),
+    ],
+)
+async def test_complete_pipecat_booking_journey_requires_exact_bare_confirmation(
+    caller_reply, expected_bookings, expected_handled, expected_prepared
+):
+    session = FakeSession()
+    tools = FakeTools(session)
+    handlers = create_voice_tool_handlers(session, tools)
+
+    availability = FakeParams(
+        {
+            "service_name": "Women's Cut",
+            "starts_at_local": "Friday 10am",
+            "staff_name": None,
+            "caller_time_phrase": "Friday at ten",
+        }
+    )
+    await handlers["check_availability"](availability)
+    assert availability.results[0][0]["available"] is True
+    assert session.voice_state.intent == "booking"
+
+    prepare = FakeParams(
+        {
+            "service_name": "Women's Cut",
+            "starts_at_local": "2026-12-04T10:00:00+13:00",
+            "customer_name": "Untrusted LLM Name",
+            "customer_phone": "000",
+            "confirmed": False,
+        }
+    )
+    await handlers["book_appointment"](prepare)
+    assert prepare.results[0][0]["ready_to_confirm"] is True
+    assert session.has_prepared_booking is True
+    assert tools.calls[-1][1][2:5] == ("Sam Taylor", "0211234567", False)
+
+    context = LLMContext(messages=[{"role": "user", "content": caller_reply}])
+    frame = LLMContextFrame(context)
+    latest = await latest_caller_text_from_frame(frame, session)
+
+    async def speak(_text, _direction):
+        return None
+
+    handled = await handle_confirmation_turn(
+        latest,
+        call_session=session,
+        tools=tools,
+        speak=speak,
+        direction="downstream",
+    )
+
+    assert handled is expected_handled
+    assert len(tools.calls) == 2 + expected_bookings
+    assert len(session.mutations) == expected_bookings
+    assert session.has_prepared_booking is expected_prepared
+    if caller_reply == "yes":
+        assert session.mutations == [
+            {
+                "service": "Women's Cut",
+                "starts_at": "2026-12-04T10:00:00+13:00",
+                "customer_name": "Sam Taylor",
+                "customer_phone": "0211234567",
+            }
+        ]
+        assert session.voice_state.confirmed is True
+        assert session.voice_state.last_tool == "book_appointment"
+    elif caller_reply == "no":
+        assert session.mutations == []
+        assert session.voice_state.confirmed is False
+    else:
+        assert session.mutations == []
+        assert session.voice_state.confirmed is False
+        assert session.prepared_booking_payload["starts_at"] == "2026-12-04T10:00:00+13:00"
