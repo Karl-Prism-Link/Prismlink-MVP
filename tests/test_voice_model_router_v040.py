@@ -5,6 +5,7 @@ from services.voice.model_router import (
     flatten_tool_result_messages,
     route_voice_turn,
 )
+from services.voice.runtime_control import select_voice_tool_schemas
 from services.voice.speech_cleanup import booking_success_speech
 
 
@@ -86,6 +87,31 @@ def test_management_always_uses_reasoning_model():
     result = decision(intent="cancel", latest_user_text="cancel my appointment")
     assert result.tier is ModelTier.REASONING
     assert result.use_tools is True
+
+
+def test_verified_reschedule_slot_uses_fast_model_with_authoritative_tools():
+    result = decision(
+        intent="reschedule",
+        last_tool="find_appointments",
+        last_tool_ok=True,
+        latest_user_text="I want to move it to Tuesday, 03:00.",
+    )
+    assert result.tier is ModelTier.FAST
+    assert result.reason == "verified_reschedule_slot"
+    assert result.use_tools is True
+
+
+def test_management_tool_success_readback_uses_fast_model_without_tools():
+    result = decision(
+        intent="reschedule",
+        last_tool="find_appointments",
+        last_tool_ok=True,
+        latest_user_text="0211112222",
+        after_tool_result=True,
+    )
+    assert result.tier is ModelTier.FAST
+    assert result.reason == "management_tool_readback"
+    assert result.use_tools is False
 
 
 def test_tool_continuation_cannot_chain_another_tool():
@@ -198,3 +224,37 @@ def test_spoken_booking_date_omits_current_year_but_keeps_a_different_year():
     assert next_year["spoken_start"] == (
         f"{datetime(current_year + 1, 1, 15).strftime('%A')} 15 January {current_year + 1} at 12:00 PM"
     )
+
+
+def test_current_booking_turn_overrides_stale_appointment_management_intent():
+    result = decision(
+        intent="appointment_management",
+        last_tool="find_appointments",
+        last_tool_ok=True,
+        latest_user_text="How much is a men's cut? I'd like to book one for Friday.",
+    )
+    assert result.tier is ModelTier.REASONING
+    assert result.use_tools is True
+    assert result.reason == "consequential_action_request"
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    selected = select_voice_tool_schemas(
+        tools,
+        intent="appointment_management",
+        routing_reason=result.reason,
+        latest_user_text="How much is a men's cut? I'd like to book one for Friday.",
+    )
+    selected_names = {tool["function"]["name"] for tool in selected}
+    assert {"book_appointment", "check_availability"} <= selected_names
+    assert "reschedule_appointment" not in selected_names
+    assert "cancel_appointment" not in selected_names

@@ -29,6 +29,10 @@ _DATE_TIME_RE = re.compile(
     r"one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b",
     re.I,
 )
+_CONSEQUENTIAL_ACTION_RE = re.compile(
+    r"\b(?:book|booking|schedule|reserve|cancel(?:lation)?|reschedul(?:e|ing)|move|change)\b",
+    re.I,
+)
 _CORRECTION_RE = re.compile(
     r"\b(?:actually|instead|correction|correct that|change that|not that|wrong|i meant|"
     r"rather|different|another|resched|cancel|move my appointment|change my appointment)\b",
@@ -82,14 +86,39 @@ def route_voice_turn(
         if last_tool_ok is False:
             return RoutingDecision(ModelTier.REASONING, "tool_failure_recovery", use_tools=False)
         if intent in {"cancel", "reschedule", "appointment_management"}:
-            return RoutingDecision(ModelTier.REASONING, "management_tool_readback", use_tools=False)
+            # A successful lookup result is read-only narration, not a new
+            # consequential decision. Keep the stronger model for interpreting
+            # the caller's management request and for recovering from tool
+            # failures, but use the fast tier to relay the authoritative result.
+            return RoutingDecision(ModelTier.FAST, "management_tool_readback", use_tools=False)
         return RoutingDecision(ModelTier.FAST, "tool_result_readback", use_tools=False)
+
+    # Once an appointment has been found and identity-verified, interpreting
+    # the caller's proposed replacement slot is a constrained extraction task.
+    # The availability tool remains authoritative and resolves the spoken date
+    # and time; the mutation still requires a separate explicit confirmation.
+    if (
+        intent == "reschedule"
+        and last_tool == "find_appointments"
+        and last_tool_ok is True
+        and _DATE_TIME_RE.search(lowered)
+        and re.search(r"\b(?:move|change|another|different|reschedul)\b", lowered)
+    ):
+        return RoutingDecision(ModelTier.FAST, "verified_reschedule_slot", use_tools=True)
 
     if confirmed and _SIMPLE_SOCIAL_RE.match(text):
         return RoutingDecision(ModelTier.FAST, "post_action_social", use_tools=False)
 
     if _SIMPLE_SOCIAL_RE.match(text):
         return RoutingDecision(ModelTier.FAST, "simple_social", use_tools=False)
+
+    # Inspect the current utterance before consulting a previous workflow's
+    # session intent. Pipecat may build this context frame before the caller-turn
+    # callback updates state, so a fresh booking must supersede stale
+    # appointment_management/cancel/reschedule scope. Tool handlers still enforce
+    # confirmation and all mutation safety checks.
+    if _CONSEQUENTIAL_ACTION_RE.search(lowered):
+        return RoutingDecision(ModelTier.REASONING, "consequential_action_request", use_tools=True)
 
     if intent in {"cancel", "reschedule", "appointment_management"}:
         return RoutingDecision(ModelTier.REASONING, "appointment_management", use_tools=True)

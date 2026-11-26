@@ -92,6 +92,89 @@ class RollingModelTokenBudget:
             await asyncio.sleep(min(wait_for_capacity, remaining))
 
 
+_INTENT_TOOL_ALLOWLISTS = {
+    "booking": frozenset(
+        {"get_salon_information", "check_availability", "book_appointment", "take_message"}
+    ),
+    "cancel": frozenset(
+        {"get_salon_information", "find_appointments", "cancel_appointment", "take_message"}
+    ),
+    "reschedule": frozenset(
+        {
+            "get_salon_information",
+            "find_appointments",
+            "check_availability",
+            "reschedule_appointment",
+            "take_message",
+        }
+    ),
+    "appointment_management": frozenset(
+        {
+            "get_salon_information",
+            "find_appointments",
+            "check_availability",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        }
+    ),
+    "message": frozenset({"get_salon_information", "take_message"}),
+    "routing": frozenset({"get_salon_information", "take_message"}),
+    "enquiry": frozenset({"get_salon_information", "take_message"}),
+}
+
+
+def select_voice_tool_schemas(
+    tools: Sequence[dict[str, Any]],
+    *,
+    intent: str | None,
+    routing_reason: str | None = None,
+    latest_user_text: str | None = None,
+) -> list[dict[str, Any]]:
+    """Limit each classified turn to tools needed for that workflow.
+
+    Unknown intents retain the complete tool set. Unrecognised schema entries are
+    retained so future/provider tools cannot silently become unavailable.
+    Tool handlers remain the authority for all consequential actions.
+    """
+    scope_intent = str(intent or "unknown").casefold()
+    if routing_reason == "consequential_action_request":
+        # Scope from the current caller request, not stale session intent. This
+        # keeps the required action tools while avoiding the full schema payload.
+        text = " ".join(str(latest_user_text or "").casefold().split())
+        requested: set[str] = set()
+        if re.search(
+            r"\b(reschedul(?:e|ing)|resched|another time|different time|"
+            r"move (?:it|my (?:appointment|booking))|"
+            r"change (?:it|my (?:appointment|booking)))\b",
+            text,
+        ):
+            requested.add("reschedule")
+        if re.search(r"\b(cancel|cancellation)\b", text):
+            requested.add("cancel")
+        if re.search(r"\b(?:book|schedule|reserve)\b", text):
+            requested.add("booking")
+        if len(requested) == 1:
+            scope_intent = next(iter(requested))
+        elif len(requested) > 1:
+            scope_intent = (
+                "appointment_management" if requested == {"cancel", "reschedule"} else "unknown"
+            )
+    if scope_intent == "unknown" and routing_reason == "salon_enquiry":
+        scope_intent = "enquiry"
+    allowed = _INTENT_TOOL_ALLOWLISTS.get(scope_intent)
+    if allowed is None:
+        return list(tools)
+    known_tools = set().union(*_INTENT_TOOL_ALLOWLISTS.values())
+    selected: list[dict[str, Any]] = []
+    for tool in tools:
+        function = tool.get("function") if isinstance(tool, dict) else None
+        name = function.get("name") if isinstance(function, dict) else None
+        if not name or name not in known_tools or name in allowed:
+            selected.append(tool)
+    return selected
+
+
 def is_rate_limit_error(error_text: str) -> bool:
     text = (error_text or "").lower()
     return (
@@ -120,14 +203,63 @@ def is_generic_booking_request(text: str) -> bool:
         return False
 
     patterns = (
-        r"\b(?:can|could|would)\s+i\s+(?:please\s+)?(?:book|make)\b",
+        r"\b(?:can|could|would)\s+i\s+(?:please\s+)?(?:book|make|schedule|reserve)\b",
+        r"\bi\s+(?:need|want|would\s+like)\s+to\s+(?:book|make|schedule|reserve)\b",
         r"\b(?:book|make|need|want|get)\s+(?:me\s+)?(?:in\s+)?(?:an?\s+)?appointment\b",
         r"\bi\s+book\s+(?:in\s+)?(?:an?\s+)?appointment\b",
         r"\bi\s+(?:need|want|would\s+like)\s+(?:to\s+)?(?:book|make)\b",
+        r"\bi(?:'d|\s+would)\s+like\s+to\s+(?:book|schedule|reserve)\b",
+        r"\b(?:schedule|reserve)\s+(?:me\s+)?(?:an?\s+)?appointment\b",
+        r"\b(?:can|could|would)\s+you\s+(?:please\s+)?reserve\s+(?:a\s+)?(?:time|slot)\b",
+        r"\bi(?:'d|\s+would|\s+want)\s+to\s+reserve\s+(?:a\s+)?(?:time|slot)\b",
+        r"\bbook\s+(?:one|a|an)\s+(?:[\w'-]+(?:\s+[\w'-]+){0,2})",
         r"\bbook\s+me\s+in\b",
         r"\b(?:book|make)\s+(?:an?\s+)?booking\b",
     )
     return any(re.search(pattern, lowered, re.I) for pattern in patterns)
+
+
+def has_explicit_appointment_management_request(text: str | None) -> bool:
+    """Detect explicit cancellation/rescheduling wording, including mixed enquiry turns."""
+    return bool(
+        re.search(
+            r"\b(?:cancel(?:lation)?|reschedul(?:e|ing)|resched|"
+            r"move\s+(?:it|my\s+(?:appointment|booking)|the\s+(?:appointment|booking))|"
+            r"change\s+(?:it|my\s+(?:appointment|booking)|the\s+(?:appointment|booking)))\b",
+            " ".join(str(text or "").casefold().split()),
+        )
+    )
+
+
+def has_explicit_new_intent(text: str | None) -> bool:
+    """Detect a fresh non-reschedule intent that should supersede stale prompt state."""
+    return bool(
+        re.search(
+            r"\b(book|booking|schedule|reserve|cancel|message|hours|open|closing|close|"
+            r"price|cost|address|parking|services?|staff|speak to)\b",
+            " ".join(str(text or "").casefold().split()),
+        )
+    )
+
+
+def reset_stale_appointment_for_new_booking(call_session: Any, latest_user_text: str) -> bool:
+    """Drop a previous management selection when the caller clearly starts a new booking."""
+    if not is_generic_booking_request(latest_user_text):
+        return False
+
+    state = call_session.voice_state
+    state.intent = "booking"
+    state.appointment_id = None
+    state.starts_at = None
+    state.confirmed = False
+    call_session.clear_voice_state_fields(
+        "service", "staff", "caller_time_phrase", "customer_name", "customer_phone"
+    )
+    call_session.clear_booking_contact()
+    call_session.clear_prepared_booking()
+    call_session.clear_prepared_reschedule()
+    call_session.clear_prepared_cancel()
+    return True
 
 
 def select_latest_caller_text(

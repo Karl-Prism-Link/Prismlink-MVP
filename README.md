@@ -19,7 +19,7 @@ and Google Calendar writes, and call cleanup before forwarding customer calls. S
 - Availability, booking, rescheduling, and cancellation with explicit confirmation.
 - Idempotent appointment creation, conflict checks, and serialized booking changes.
 - Call logs, transcripts, outcomes, summaries, and a salon message inbox.
-- Browser/WebRTC voice using Pipecat, Deepgram STT/TTS, and Groq/OpenRouter tool calling.
+- Browser/WebRTC voice using Pipecat, Deepgram STT/TTS, and Groq tool calling.
 - Deterministic handling for common booking, message, routing, hours, and confirmation turns.
 - Aurora SIP/RTP transport with an isolated Pipecat pipeline per call and called-number tenant routing.
 - Dashboard, health endpoints, Alembic migrations, Docker assets, and automated tests.
@@ -122,7 +122,7 @@ call coordination boundary but is not yet the authoritative session coordinator.
 - [Current MVP and pilot status](docs/MVP_STATUS.md)
 - [Voice runtime setup](docs/VOICE_SETUP.md)
 - [Google Calendar OAuth setup](docs/GOOGLE_OAUTH_SETUP.md)
-- [OpenRouter development setup](docs/OPENROUTER_SETUP.md)
+- [Voice setup](docs/VOICE_SETUP.md)
 
 ## Project layout
 

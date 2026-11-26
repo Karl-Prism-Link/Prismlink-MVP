@@ -63,7 +63,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "# Voice operations\n**SIP trunk → Aurora → RTP → Pipecat → Deepgram / Groq → booking services**  \nUse this page from left to right. A call is healthy only when SIP, both RTP directions, the callback, and the Pipecat session all succeed."
+        "content": "# Voice operations\n**SIP trunk \u2192 Aurora \u2192 RTP \u2192 Pipecat \u2192 Deepgram / Groq \u2192 booking services**  \nUse this page from left to right. A call is healthy only when SIP, both RTP directions, the callback, and the Pipecat session all succeed."
       },
       "transparent": true
     },
@@ -525,7 +525,7 @@
     {
       "id": 20,
       "type": "timeseries",
-      "title": "Aurora → Pipecat handoff",
+      "title": "Aurora \u2192 Pipecat handoff",
       "gridPos": {
         "x": 0,
         "y": 17,
@@ -592,7 +592,7 @@
     {
       "id": 21,
       "type": "timeseries",
-      "title": "Caller turn → audible reply (p50 / p95)",
+      "title": "Caller turn \u2192 audible reply (p50 / p95)",
       "description": "Target: average conversational response below 2 seconds where provider conditions allow.",
       "gridPos": {
         "x": 12,
@@ -768,6 +768,216 @@
             "lineWidth": 2,
             "fillOpacity": 8,
             "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Groq actual tokens / min",
+      "description": "Provider-reported prompt and completion token consumption, split by fast and reasoning model tier. Populates after live Groq responses.",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model_tier) (rate(groq_prompt_tokens_total[5m])) * 60",
+          "legendFormat": "{{model_tier}} prompt"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (model_tier) (rate(groq_completion_tokens_total[5m])) * 60",
+          "legendFormat": "{{model_tier}} completion"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Groq remaining TPM",
+      "description": "Latest provider-reported remaining tokens per minute. A low value means slow down or allow the window to reset.",
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (model_tier) (groq_rate_limit_tokens{kind=\"remaining\"})",
+          "legendFormat": "{{model_tier}} remaining"
+        },
+        {
+          "refId": "B",
+          "expr": "max by (model_tier) (groq_rate_limit_tokens{kind=\"limit\"})",
+          "legendFormat": "{{model_tier}} limit"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "last"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Groq rate limits / min",
+      "description": "429 responses per minute. Investigate any sustained non-zero rate; this counter is separate from local TPM admission rejections.",
+      "gridPos": {
+        "x": 18,
+        "y": 35,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model_tier) (rate(groq_requests_total{outcome=\"http_429\"}[5m])) * 60",
+          "legendFormat": "{{model_tier}} HTTP 429"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "last"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "Groq estimate accuracy",
+      "description": "Actual total tokens divided by the local reservation estimate. Above 1 means the estimator is underestimating provider usage; below 1 means the reservation is conservative.",
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model_tier) (rate(groq_total_tokens_total[5m])) / clamp_min(sum by (model_tier) (rate(groq_estimated_tokens_total[5m])), 0.001)",
+          "legendFormat": "{{model_tier}} actual / estimate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "last"
           }
         },
         "overrides": []

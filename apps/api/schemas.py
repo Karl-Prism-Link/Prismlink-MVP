@@ -1,14 +1,31 @@
-from datetime import datetime, time
+from datetime import UTC, datetime, time
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_serializer,
+    field_validator,
+)
 
 from core.validation import CustomerInputError, normalise_customer_name, normalise_nz_phone
 
 
 class APIModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("*", mode="wrap", when_used="json", check_fields=False)
+    def serialize_datetime_as_utc(self, value, handler):
+        """Make naive database UTC timestamps explicit at the API boundary."""
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
+            else:
+                value = value.astimezone(UTC)
+        return handler(value)
 
 
 class TokenOut(BaseModel):
@@ -305,7 +322,6 @@ class VoiceStatusOut(BaseModel):
     llm_model: str
     llm_configured: bool
     groq_configured: bool
-    openrouter_configured: bool
     configured_tenant_slug: str | None
     current_tenant_slug: str
     tenant_matches: bool

@@ -198,6 +198,16 @@ class LiveCallSession:
         self._booking_phone_digits = ""
         self.clear_prepared_booking()
 
+    def clear_booking_contact(self) -> None:
+        """Clear customer identity and capture buffers before a different booking."""
+        self.voice_state.customer_name = None
+        self.voice_state.customer_phone = None
+        self._booking_phone_digits = ""
+        self._booking_spelled_name = None
+        self._booking_phone_capture_active = False
+        self._booking_name_capture_active = False
+        self.clear_prepared_booking()
+
     @property
     def booking_spelled_name(self) -> str | None:
         return self._booking_spelled_name

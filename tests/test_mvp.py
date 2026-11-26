@@ -256,24 +256,23 @@ def test_voice_status_does_not_expose_secrets(client, monkeypatch):
         "settings",
         SimpleNamespace(
             deepgram_api_key="secret-deepgram",
-            llm_provider="openrouter",
+            llm_provider="groq",
             groq_api_key="secret-groq",
-            openrouter_api_key="secret-openrouter",
             voice_tenant_slug="status-salon",
-            groq_model="llama-test",
-            openrouter_model="openrouter/free",
+            groq_fast_model="openai/gpt-oss-20b",
+            groq_reasoning_model="openai/gpt-oss-120b",
         ),
     )
     response = client.get("/api/v1/voice/status", headers=auth(token))
     assert response.status_code == 200
     data = response.json()
     assert data["browser_voice_ready"] is True
-    assert data["llm_provider"] == "openrouter"
-    assert data["llm_model"] == "openrouter/free"
+    assert data["llm_provider"] == "groq"
+    assert data["llm_model"] == "fast=openai/gpt-oss-20b; reasoning=openai/gpt-oss-120b"
     assert data["llm_configured"] is True
+    assert data["groq_configured"] is True
     assert "secret-deepgram" not in response.text
     assert "secret-groq" not in response.text
-    assert "secret-openrouter" not in response.text
 
 
 def test_business_hours_can_be_configured_and_read(client):

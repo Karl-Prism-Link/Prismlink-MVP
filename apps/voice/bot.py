@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from typing import Any
 from uuid import uuid4
 
 from loguru import logger
+from openai import APITimeoutError
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     AggregatedTextFrame,
     Frame,
-    FunctionCallResultProperties,
     LLMContextFrame,
     TTSSpeakFrame,
 )
@@ -32,16 +33,20 @@ from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
-from pipecat.services.llm_service import FunctionCallParams
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from apps.voice.prompt import build_voice_greeting, build_voice_system_prompt
+from apps.voice.prompt import (
+    build_voice_greeting,
+    build_voice_reschedule_system_prompt,
+    build_voice_system_prompt,
+)
 from core.config import get_settings
 from database.repositories import TenantRepository
 from database.session import DBSession
-from monitoring import record_voice_turn_latency
+from monitoring import record_groq_error, record_groq_response, record_voice_turn_latency
 from services.service_names import configured_service_name_from_speech
+from services.voice.confirmation import handle_confirmation_turn
 from services.voice.contact import (
     extract_booking_day_reference,
     extract_booking_name_candidate,
@@ -70,7 +75,6 @@ from services.voice.message_routing import (
 )
 from services.voice.model_router import (
     ModelTier,
-    confirmation_fastpath_action,
     flatten_tool_result_messages,
     route_voice_turn,
 )
@@ -78,40 +82,35 @@ from services.voice.runtime_control import (
     STATE_MARKER,
     RollingModelTokenBudget,
     compact_context_messages,
+    has_explicit_appointment_management_request,
+    has_explicit_new_intent,
     is_generic_booking_request,
     is_rate_limit_error,
-    select_latest_caller_text,
+    reset_stale_appointment_for_new_booking,
+    select_voice_tool_schemas,
 )
 from services.voice.safety import (
     immediate_emergency_response,
     is_health_only_request,
     is_immediate_emergency_language,
 )
-from services.voice.salon_enquiries import (
-    business_hours_summary_speech,
-    is_business_hours_question,
-    is_open_now_question,
-    is_price_question,
-    is_price_service_clarification,
-    open_now_speech,
-    price_speech,
-)
 from services.voice.session import LiveCallSession
 from services.voice.speech_cleanup import (
     booking_confirmation_speech,
-    booking_success_speech,
-    cancellation_success_speech,
     deterministic_post_action_social_reply,
     is_farewell_utterance,
     is_post_booking_confirmation_request,
     is_spoken_question,
     limit_spoken_questions,
-    mutation_failure_speech,
-    reschedule_success_speech,
     spoken_segment_key,
 )
 from services.voice.stt_context import stt_vocabulary_settings
+from services.voice.tool_handlers import create_voice_tool_handlers
 from services.voice.tools import VoiceToolset
+from services.voice.turn_handlers import (
+    handle_common_enquiry,
+    latest_caller_text_from_frame,
+)
 
 settings = get_settings()
 
@@ -277,9 +276,36 @@ async def run_bot(
             async def get_chat_completions(self, context):
                 def request_params():
                     adapter = self.get_llm_adapter()
+                    messages = context.get_messages()
+                    latest_user = next(
+                        (
+                            str(message.get("content") or "")
+                            for message in reversed(messages)
+                            if message.get("role") == "user"
+                        ),
+                        call_session.latest_caller_transcript or "",
+                    )
+                    latest_user_normalized = " ".join(latest_user.casefold().split())
+                    explicit_reschedule = bool(
+                        re.search(
+                            r"\b(reschedul(?:e|ing)|resched|another time|different time|"
+                            r"move (?:it|my (?:appointment|booking))|"
+                            r"change (?:it|my (?:appointment|booking)))\b",
+                            latest_user_normalized,
+                        )
+                    )
+                    explicit_new_intent = has_explicit_new_intent(latest_user_normalized)
+                    reschedule_turn = explicit_reschedule or (
+                        call_session.voice_state.intent == "reschedule" and not explicit_new_intent
+                    )
+                    system_instruction = (
+                        build_voice_reschedule_system_prompt(tenant)
+                        if reschedule_turn
+                        else self._settings.system_instruction
+                    )
                     return adapter.get_llm_invocation_params(
                         context,
-                        system_instruction=self._settings.system_instruction,
+                        system_instruction=system_instruction,
                         convert_developer_to_user=not self.supports_developer_role,
                     )
 
@@ -330,6 +356,15 @@ async def run_bot(
                         original_estimate,
                         estimate,
                     )
+                logger.info(
+                    "PRISM LINK Groq TPM request model={} estimated_tokens={} budget_tokens={} "
+                    "tool_count={} trimmed_turns={}",
+                    model,
+                    estimate,
+                    _groq_token_budget.tokens_per_minute,
+                    len(params.get("tools") or []),
+                    trimmed_turns,
+                )
                 wait_seconds = await _groq_token_budget.reserve(model, estimate)
                 logger.info(
                     "PRISM LINK Groq TPM admission model={} estimated_tokens={} wait_ms={}",
@@ -337,9 +372,68 @@ async def run_bot(
                     estimate,
                     round(wait_seconds * 1000),
                 )
-                # Reuse Pipecat's provider implementation for timeout and SDK retry
-                # handling after the request has been admitted.
-                return await super().get_chat_completions(context)
+                # Send the exact parameters admitted above. Calling the base
+                # implementation here would rebuild messages from the service's
+                # full default system prompt, invalidating the compact-prompt
+                # estimate and recreating the TPM rejection this path prevents.
+                self._log_llm_response(context)
+                model_tier = "fast" if model == settings.groq_fast_model else "reasoning"
+
+                async def create_and_observe():
+                    try:
+                        raw_response = await self._client.chat.completions.with_raw_response.create(
+                            **params
+                        )
+                        completion = raw_response.parse()
+                    except Exception as exc:
+                        error_response = getattr(exc, "response", None)
+                        error_headers = getattr(error_response, "headers", None)
+                        status_code = getattr(exc, "status_code", None)
+                        snapshot = record_groq_error(model_tier, status_code, error_headers)
+                        logger.warning(
+                            "PRISM LINK Groq request failed model_tier={} status={} "
+                            "remaining_tokens={} reset_tokens={} retry_after={}",
+                            model_tier,
+                            status_code or "transport_error",
+                            snapshot.get("token_remaining"),
+                            snapshot.get("token_reset_seconds"),
+                            snapshot.get("retry_after"),
+                        )
+                        raise
+
+                    usage = getattr(completion, "usage", None)
+                    snapshot = record_groq_response(
+                        model_tier, usage, raw_response.headers, estimated_tokens=estimate
+                    )
+                    logger.info(
+                        "PRISM LINK Groq usage model_tier={} prompt_tokens={} "
+                        "completion_tokens={} total_tokens={} estimated_tokens={} estimate_ratio={} remaining_tokens={} "
+                        "token_limit={} reset_tokens_seconds={} remaining_requests={} "
+                        "request_limit={}",
+                        model_tier,
+                        snapshot.get("prompt_tokens"),
+                        snapshot.get("completion_tokens"),
+                        snapshot.get("total_tokens"),
+                        snapshot.get("estimated_tokens"),
+                        snapshot.get("estimate_ratio"),
+                        snapshot.get("token_remaining"),
+                        snapshot.get("token_limit"),
+                        snapshot.get("token_reset_seconds"),
+                        snapshot.get("request_remaining"),
+                        snapshot.get("request_limit"),
+                    )
+                    return completion
+
+                if self._retry_on_timeout:
+                    try:
+                        return await asyncio.wait_for(
+                            create_and_observe(),
+                            timeout=self._retry_timeout_secs,
+                        )
+                    except (TimeoutError, APITimeoutError):
+                        logger.debug("{}: Retrying chat completion after provider timeout", self)
+                        return await create_and_observe()
+                return await create_and_observe()
 
             def create_client(
                 self,
@@ -392,6 +486,8 @@ async def run_bot(
                     latest_user_text=latest_user,
                     after_tool_result=after_tool_result,
                 )
+                if decision.reason == "consequential_action_request":
+                    reset_stale_appointment_for_new_booking(call_session, latest_user)
                 model = (
                     settings.groq_fast_model
                     if decision.tier is ModelTier.FAST
@@ -400,9 +496,23 @@ async def run_bot(
                 if after_tool_result and not decision.use_tools:
                     params["messages"] = flatten_tool_result_messages(messages)
                 params["model"] = model
+                original_tool_count = len(params.get("tools") or [])
+                if decision.use_tools:
+                    params["tools"] = select_voice_tool_schemas(
+                        params.get("tools") or [],
+                        intent=call_session.voice_state.intent,
+                        routing_reason=decision.reason,
+                        latest_user_text=latest_user,
+                    )
                 if not decision.use_tools:
                     params.pop("tools", None)
                     params.pop("tool_choice", None)
+                selected_tool_names = [
+                    str(tool.get("function", {}).get("name"))
+                    for tool in params.get("tools") or []
+                    if isinstance(tool, dict) and isinstance(tool.get("function"), dict)
+                ]
+                selected_tool_count = len(selected_tool_names)
                 if model.startswith("openai/gpt-oss-"):
                     extra_body = dict(params.get("extra_body") or {})
                     extra_body.update(
@@ -416,11 +526,21 @@ async def run_bot(
                         }
                     )
                     params["extra_body"] = extra_body
+                tool_scope = (
+                    "none"
+                    if not decision.use_tools
+                    else "scoped"
+                    if selected_tool_count < original_tool_count
+                    else "full"
+                )
                 logger.info(
-                    "PRISM LINK LLM route={} model={} tools={} reason={}",
+                    "PRISM LINK LLM route={} model={} tool_scope={} tool_count={} "
+                    "tool_names={} reason={}",
                     decision.tier.value,
                     model,
-                    "full" if decision.use_tools else "none",
+                    tool_scope,
+                    selected_tool_count,
+                    ",".join(selected_tool_names) or "none",
                     decision.reason,
                 )
                 return params
@@ -434,18 +554,6 @@ async def run_bot(
                 model=settings.groq_fast_model,
                 temperature=0.2,
                 max_completion_tokens=max(64, settings.groq_max_completion_tokens),
-                system_instruction=system_prompt,
-            ),
-        )
-    elif settings.llm_provider == "openrouter":
-        from pipecat.services.openrouter.llm import OpenRouterLLMService
-
-        openrouter_key = _required("OPENROUTER_API_KEY", settings.openrouter_api_key)
-        llm = OpenRouterLLMService(
-            api_key=openrouter_key,
-            settings=OpenRouterLLMService.Settings(
-                model=settings.openrouter_model,
-                temperature=0.2,
                 system_instruction=system_prompt,
             ),
         )
@@ -473,8 +581,6 @@ async def run_bot(
             settings.groq_reasoning_effort,
             settings.voice_context_turns,
         )
-    else:
-        logger.info("PRISM LINK OpenRouter model={}", settings.openrouter_model)
     tts = DeepgramTTSService(
         api_key=deepgram_key,
         settings=DeepgramTTSService.Settings(voice=settings.deepgram_tts_voice),
@@ -671,109 +777,15 @@ async def run_bot(
             return True
 
         async def _handle_common_enquiry(self, latest_user: str, direction: FrameDirection) -> bool:
-            """Answer configured salon fact questions without an LLM round trip."""
-            state = call_session.voice_state
-            recent = call_session.recent_caller_transcripts
-            service_reply = configured_service_name_from_speech(
-                latest_user, configured_service_names
+            return await handle_common_enquiry(
+                latest_user,
+                direction,
+                call_session=call_session,
+                tools=tools,
+                configured_service_names=configured_service_names,
+                tenant=tenant,
+                speak=self._speak,
             )
-            price_service_clarification = bool(
-                service_reply
-                and is_price_service_clarification(
-                    latest_user,
-                    recent,
-                    intent=state.intent,
-                    last_tool=state.last_tool,
-                )
-            )
-            if is_price_question(latest_user) or price_service_clarification:
-                # Treat pricing as a separate enquiry before branching on whether a
-                # configured price exists. Never leave a prepared action armed, and
-                # never record a message request until a message is actually submitted.
-                call_session.clear_prepared_booking()
-                call_session.clear_prepared_reschedule()
-                call_session.clear_prepared_cancel()
-                call_session.clear_prepared_message()
-                call_session.update_voice_state(
-                    intent="enquiry",
-                    confirmed=False,
-                    last_tool="get_salon_information",
-                    last_tool_ok=None,
-                )
-                service_name = service_reply
-                if service_name is None:
-                    await self._speak("Which service would you like the price for?", direction)
-                    call_session.update_voice_state(
-                        intent="enquiry", confirmed=False, last_tool="get_salon_information"
-                    )
-                    return True
-
-                service_rows = [row for row in await tools.services.list() if row.is_active]
-                service = next(
-                    (row for row in service_rows if row.name == service_name),
-                    None,
-                )
-                if service is None or service.price is None:
-                    call_session.set_resolution(
-                        "enquiry_resolved",
-                        f"Price is not configured for {service_name}; caller was offered a message, but no message was taken.",
-                    )
-                    await self._speak(
-                        f"I don't have a price configured for {service_name}. I can take a message for the salon if you'd like.",
-                        direction,
-                    )
-                    return True
-
-                speech = price_speech(
-                    service_name,
-                    service.price,
-                    currency=str(getattr(tenant, "currency", "NZD") or "NZD"),
-                    prices_include_gst=bool(getattr(tenant, "prices_include_gst", True)),
-                )
-                call_session.update_voice_state(
-                    intent="enquiry",
-                    confirmed=False,
-                    last_tool="get_salon_information",
-                    last_tool_ok=True,
-                )
-                call_session.set_resolution(
-                    "enquiry_resolved",
-                    f"Answered configured salon price enquiry for {service_name}.",
-                )
-                await self._speak(speech, direction)
-                logger.info(
-                    "PRISM LINK deterministic salon price fastpath service={}", service_name
-                )
-                return True
-
-            if not is_business_hours_question(latest_user):
-                return False
-
-            hours = await tools.hours.list()
-            if is_open_now_question(latest_user):
-                speech = open_now_speech(hours, tenant.timezone)
-                enquiry_kind = "open_now"
-            else:
-                speech = business_hours_summary_speech(hours)
-                enquiry_kind = "business_hours"
-
-            call_session.clear_prepared_booking()
-            call_session.clear_prepared_reschedule()
-            call_session.clear_prepared_cancel()
-            call_session.clear_prepared_message()
-            call_session.update_voice_state(
-                intent="enquiry",
-                confirmed=False,
-                last_tool="get_salon_information",
-                last_tool_ok=True,
-            )
-            call_session.set_resolution(
-                "enquiry_resolved",
-                f"Answered configured salon {enquiry_kind} enquiry.",
-            )
-            await self._speak(speech, direction)
-            logger.info("PRISM LINK deterministic salon hours fastpath kind={}", enquiry_kind)
-            return True
 
         async def _handle_routing_and_message(
             self, latest_user: str, direction: FrameDirection
@@ -1004,6 +1016,10 @@ async def run_bot(
         ) -> bool:
             """Resolve short service clarifications and preserved date/time without an LLM call."""
             state = call_session.voice_state
+            # A service name inside a mixed price + reschedule request is not a
+            # new-booking clarification. Let appointment-management routing handle it.
+            if has_explicit_appointment_management_request(latest_user):
+                return False
             if state.starts_at or call_session.has_prepared_booking:
                 return False
 
@@ -1260,24 +1276,10 @@ async def run_bot(
                 await self.push_frame(frame, direction)
                 return
 
-            messages = frame.context.get_messages()
-            context_latest_user = next(
-                (
-                    str(message.get("content") or "")
-                    for message in reversed(messages)
-                    if message.get("role") == "user"
-                ),
-                "",
-            )
-            latest_user = select_latest_caller_text(
-                context_latest_user,
-                call_session.recent_caller_transcripts,
-            )
             # Keep the deterministic guard correct even if Pipecat's event callback and
             # LLMContextFrame arrive in either order. Never append a known older context
             # turn over a newer session transcript.
-            if latest_user and latest_user not in call_session.recent_caller_transcripts:
-                await call_session.append_transcript("caller", latest_user)
+            latest_user = await latest_caller_text_from_frame(frame, call_session)
 
             # Immediate safety is a persistent runtime state, not an LLM/context hint.
             # Once active, it is checked before every ordinary workflow and cannot be
@@ -1357,434 +1359,28 @@ async def run_bot(
             if await self._handle_booking_contact_capture(latest_user, direction):
                 return
 
-            action = confirmation_fastpath_action(
-                latest_user_text=latest_user,
-                has_prepared_booking=call_session.has_prepared_booking,
-                has_prepared_reschedule=call_session.has_prepared_reschedule,
-                has_prepared_cancel=call_session.has_prepared_cancel,
-                has_prepared_message=call_session.has_prepared_message,
-                is_affirmation=is_explicit_affirmation(latest_user),
-                is_rejection=is_explicit_rejection(latest_user),
-            )
-            if action is None:
-                await self.push_frame(frame, direction)
-                return
-
-            logger.info("PRISM LINK deterministic confirmation fastpath action={}", action)
-
-            if action == "booking_confirm":
-                result = await tools.book_appointment("", "", "", "", True, None, None)
-                call_session.update_voice_state(
-                    appointment_id=result.get("appointment_id"),
-                    service=result.get("service"),
-                    starts_at=result.get("starts_at"),
-                    customer_name=result.get("customer_name"),
-                    customer_phone=result.get("customer_phone"),
-                    confirmed=result.get("booked") is True,
-                    last_tool="book_appointment",
-                    last_tool_ok=result.get("ok"),
-                )
-                if result.get("ok") is True and result.get("booked") is True:
-                    await self._speak(booking_success_speech(result), direction)
-                else:
-                    await self._speak(mutation_failure_speech(result, action="book"), direction)
-                return
-
-            if action == "reschedule_confirm":
-                state = call_session.voice_state
-                result = await tools.reschedule_appointment(
-                    str(state.appointment_id or ""),
-                    str(state.starts_at or ""),
-                    True,
-                    state.caller_time_phrase,
-                )
-                call_session.update_voice_state(
-                    service=result.get("service"),
-                    starts_at=result.get("starts_at"),
-                    appointment_id=result.get("appointment_id"),
-                    confirmed=result.get("rescheduled") is True,
-                    last_tool="reschedule_appointment",
-                    last_tool_ok=result.get("ok"),
-                )
-                if result.get("ok") is True and result.get("rescheduled") is True:
-                    await self._speak(reschedule_success_speech(result), direction)
-                else:
-                    await self._speak(
-                        mutation_failure_speech(result, action="reschedule"), direction
-                    )
-                return
-
-            if action == "cancel_confirm":
-                state = call_session.voice_state
-                result = await tools.cancel_appointment(str(state.appointment_id or ""), True)
-                call_session.update_voice_state(
-                    service=result.get("service"),
-                    starts_at=result.get("starts_at"),
-                    appointment_id=result.get("appointment_id"),
-                    confirmed=result.get("cancelled") is True,
-                    last_tool="cancel_appointment",
-                    last_tool_ok=result.get("ok"),
-                )
-                if result.get("ok") is True and result.get("cancelled") is True:
-                    await self._speak(cancellation_success_speech(result), direction)
-                else:
-                    await self._speak(mutation_failure_speech(result, action="cancel"), direction)
-                return
-
-            if action == "message_confirm":
-                state = call_session.voice_state
-                result = await tools.take_message("", "", None, True, state.message_target)
-                call_session.update_voice_state(
-                    confirmed=result.get("submitted") is True,
-                    last_tool="take_message",
-                    last_tool_ok=result.get("ok"),
-                )
-                if result.get("ok") is True and result.get("submitted") is True:
-                    target = str(result.get("target_staff") or "").strip()
-                    if target:
-                        await self._speak(f"I've left your message for {target}.", direction)
-                    else:
-                        await self._speak("I've left your message for the salon.", direction)
-                else:
-                    await self._speak(
-                        "I couldn't safely submit that message. I can try taking it again.",
-                        direction,
-                    )
-                return
-
-            if action == "message_reject":
-                target = call_session.voice_state.message_target
-                call_session.clear_prepared_message()
-                call_session.clear_message_phone()
-                call_session.clear_voice_state_fields("message_text")
-                call_session.update_voice_state(
-                    intent="message", message_target=target, confirmed=False
-                )
-                target_phrase = f" for {target}" if target else ""
-                await self._speak(
-                    f"Okay. What message would you like me to leave{target_phrase}?", direction
-                )
-                return
-
-            if action == "booking_reject":
-                call_session.clear_prepared_booking()
-                call_session.update_voice_state(confirmed=False)
-                await self._speak("Okay. What would you like to change?", direction)
-                return
-
-            if action == "reschedule_reject":
-                call_session.clear_prepared_reschedule()
-                call_session.clear_voice_state_fields("caller_time_phrase", "starts_at")
-                call_session.update_voice_state(confirmed=False, intent="reschedule")
-                await self._speak("Okay. What time would you prefer instead?", direction)
-                return
-
-            if action == "cancel_reject":
-                call_session.clear_prepared_cancel()
-                call_session.update_voice_state(confirmed=False, intent="appointment_management")
-                await self._speak(
-                    "Okay, I won't cancel it. Is there anything else I can help with?", direction
-                )
+            if await handle_confirmation_turn(
+                latest_user,
+                call_session=call_session,
+                tools=tools,
+                speak=self._speak,
+                direction=direction,
+            ):
+                logger.info("PRISM LINK deterministic confirmation fastpath handled")
                 return
 
             await self.push_frame(frame, direction)
 
     confirmation_gate = DeterministicConfirmationGate()
 
-    def _tool_args(params: FunctionCallParams, tool_name: str, allowed: set[str]) -> dict[str, Any]:
-        args = dict(params.arguments or {})
-        unexpected = sorted(set(args) - allowed)
-        if unexpected:
-            # Never log argument values here; they may contain caller PII.
-            logger.warning(
-                "PRISM LINK tool={} ignored unexpected argument names={}",
-                tool_name,
-                unexpected,
-            )
-        return args
-
-    async def get_salon_information_handler(params: FunctionCallParams):
-        args = _tool_args(params, "get_salon_information", {"question"})
-        question = str(args.get("question") or "salon information")
-        await params.result_callback(await tools.get_salon_information(question))
-
-    async def check_availability_handler(params: FunctionCallParams):
-        args = _tool_args(
-            params,
-            "check_availability",
-            {"service_name", "starts_at_local", "staff_name", "caller_time_phrase"},
-        )
-        selected_appointment_id = call_session.voice_state.appointment_id
-        management_mode = call_session.voice_state.intent in {
-            "appointment_management",
-            "reschedule",
-        } and bool(selected_appointment_id)
-        if management_mode:
-            # A reschedule keeps the existing appointment's service, duration and staff.
-            # Ignore any service label/ID the LLM happened to put on the generic
-            # availability call; the selected appointment is authoritative.
-            call_session.update_voice_state(
-                intent="reschedule",
-                caller_time_phrase=args.get("caller_time_phrase"),
-                confirmed=False,
-                last_tool="check_availability",
-            )
-            result = await tools.check_reschedule_availability(
-                str(selected_appointment_id),
-                str(args.get("starts_at_local") or ""),
-                args.get("caller_time_phrase"),
-            )
-        else:
-            call_session.update_voice_state(
-                intent="booking",
-                service=args.get("service_name"),
-                staff=args.get("staff_name"),
-                caller_time_phrase=args.get("caller_time_phrase"),
-                confirmed=False,
-                last_tool="check_availability",
-            )
-            result = await tools.check_availability(
-                str(args.get("service_name") or ""),
-                str(args.get("starts_at_local") or ""),
-                args.get("staff_name"),
-                args.get("caller_time_phrase"),
-            )
-        call_session.update_voice_state(
-            service=result.get("service"),
-            staff=result.get("staff"),
-            caller_time_phrase=result.get("caller_time_phrase"),
-            starts_at=result.get("starts_at"),
-            appointment_id=result.get("appointment_id"),
-            last_tool_ok=result.get("ok"),
-        )
-        await params.result_callback(result)
-
-    async def book_appointment_handler(params: FunctionCallParams):
-        args = _tool_args(
-            params,
-            "book_appointment",
-            {
-                "service_name",
-                "starts_at_local",
-                "customer_name",
-                "customer_phone",
-                "confirmed",
-                "staff_name",
-                "caller_time_phrase",
-            },
-        )
-        effective_name = (
-            call_session.booking_spelled_name or str(args.get("customer_name") or "").strip()
-        )
-        effective_phone = call_session.booking_phone_digits or str(args.get("customer_phone") or "")
-        call_session.update_voice_state(
-            intent="booking",
-            service=args.get("service_name"),
-            staff=args.get("staff_name"),
-            caller_time_phrase=args.get("caller_time_phrase"),
-            customer_name=effective_name,
-            customer_phone=effective_phone,
-            confirmed=args.get("confirmed") is True,
-            last_tool="book_appointment",
-        )
-        result = await tools.book_appointment(
-            str(args.get("service_name") or ""),
-            str(args.get("starts_at_local") or ""),
-            effective_name,
-            effective_phone,
-            args.get("confirmed") is True,
-            args.get("staff_name"),
-            args.get("caller_time_phrase"),
-        )
-        call_session.update_voice_state(
-            service=result.get("service"),
-            staff=result.get("staff"),
-            starts_at=result.get("starts_at"),
-            appointment_id=result.get("appointment_id"),
-            customer_name=result.get("customer_name"),
-            customer_phone=result.get("customer_phone"),
-            confirmed=result.get("booked") is True,
-            last_tool_ok=result.get("ok"),
-        )
-        await params.result_callback(result)
-
-    async def find_appointments_handler(params: FunctionCallParams):
-        args = _tool_args(
-            params,
-            "find_appointments",
-            {"customer_phone", "customer_name", "caller_time_phrase"},
-        )
-        management_intent = call_session.voice_state.intent
-        if management_intent not in {"cancel", "reschedule"}:
-            management_intent = "appointment_management"
-        call_session.update_voice_state(
-            intent=management_intent,
-            customer_phone=args.get("customer_phone"),
-            customer_name=args.get("customer_name"),
-            caller_time_phrase=args.get("caller_time_phrase"),
-            confirmed=False,
-            last_tool="find_appointments",
-        )
-        result = await tools.find_appointments(
-            str(args.get("customer_phone") or ""),
-            args.get("customer_name"),
-            args.get("caller_time_phrase"),
-        )
-        appointments = result.get("appointments") or []
-        selected = appointments[0] if len(appointments) == 1 else None
-        call_session.update_voice_state(
-            appointment_id=selected.get("appointment_id") if selected else None,
-            service=selected.get("service") if selected else None,
-            starts_at=selected.get("starts_at") if selected else None,
-            customer_name=(
-                call_session.voice_state.customer_name
-                or (selected.get("customer_name") if selected else None)
-            ),
-            customer_phone=result.get("verified_customer_phone"),
-            last_tool_ok=result.get("ok"),
-        )
-        # For a cancellation with exactly one verified appointment, prepare the mutation
-        # before the assistant speaks. This makes the next spoken question the single
-        # consequential confirmation instead of requiring two successive "yes" answers.
-        if (
-            result.get("ok") is True
-            and result.get("identity_verified") is True
-            and selected is not None
-            and call_session.voice_state.intent == "cancel"
-        ):
-            prepared = await tools.cancel_appointment(
-                str(selected.get("appointment_id") or ""), False
-            )
-            call_session.update_voice_state(
-                appointment_id=prepared.get("appointment_id"),
-                service=prepared.get("service"),
-                starts_at=prepared.get("starts_at"),
-                last_tool="cancel_appointment",
-                last_tool_ok=prepared.get("ok"),
-                confirmed=False,
-            )
-            await params.result_callback(prepared)
-            return
-        await params.result_callback(result)
-
-    async def reschedule_appointment_handler(params: FunctionCallParams):
-        args = _tool_args(
-            params,
-            "reschedule_appointment",
-            {"appointment_id", "starts_at_local", "confirmed", "caller_time_phrase"},
-        )
-        call_session.update_voice_state(
-            intent="reschedule",
-            appointment_id=args.get("appointment_id"),
-            caller_time_phrase=args.get("caller_time_phrase"),
-            confirmed=args.get("confirmed") is True,
-            last_tool="reschedule_appointment",
-        )
-        result = await tools.reschedule_appointment(
-            str(args.get("appointment_id") or ""),
-            str(args.get("starts_at_local") or ""),
-            args.get("confirmed") is True,
-            args.get("caller_time_phrase"),
-        )
-        call_session.update_voice_state(
-            service=result.get("service"),
-            starts_at=result.get("starts_at"),
-            appointment_id=result.get("appointment_id"),
-            confirmed=result.get("rescheduled") is True,
-            last_tool_ok=result.get("ok"),
-        )
-        if result.get("ok") is True and result.get("rescheduled") is True:
-            # The tool result is already authoritative. Do not pay for another LLM
-            # round-trip just to paraphrase a successful mutation. Store the result in
-            # context without running the LLM, then speak the deterministic sentence.
-            await params.result_callback(
-                result,
-                properties=FunctionCallResultProperties(run_llm=False),
-            )
-            spoken = reschedule_success_speech(result)
-            await call_session.append_transcript("assistant", spoken)
-            await params.llm.push_frame(TTSSpeakFrame(text=spoken, append_to_context=True))
-            return
-        await params.result_callback(result)
-
-    async def cancel_appointment_handler(params: FunctionCallParams):
-        args = _tool_args(params, "cancel_appointment", {"appointment_id", "confirmed"})
-        call_session.update_voice_state(
-            intent="cancel",
-            appointment_id=args.get("appointment_id"),
-            confirmed=args.get("confirmed") is True,
-            last_tool="cancel_appointment",
-        )
-        result = await tools.cancel_appointment(
-            str(args.get("appointment_id") or ""),
-            args.get("confirmed") is True,
-        )
-        call_session.update_voice_state(
-            service=result.get("service"),
-            starts_at=result.get("starts_at"),
-            appointment_id=result.get("appointment_id"),
-            confirmed=result.get("cancelled") is True and not result.get("already_cancelled"),
-            last_tool_ok=result.get("ok"),
-        )
-        if (
-            result.get("ok") is True
-            and result.get("cancelled") is True
-            and not result.get("already_cancelled")
-        ):
-            await params.result_callback(
-                result,
-                properties=FunctionCallResultProperties(run_llm=False),
-            )
-            spoken = cancellation_success_speech(result)
-            await call_session.append_transcript("assistant", spoken)
-            await params.llm.push_frame(TTSSpeakFrame(text=spoken, append_to_context=True))
-            return
-        await params.result_callback(result)
-
-    async def take_message_handler(params: FunctionCallParams):
-        args = _tool_args(
-            params,
-            "take_message",
-            {"message", "customer_phone", "customer_name", "confirmed", "target_staff"},
-        )
-        call_session.update_voice_state(
-            intent="message",
-            message_text=args.get("message"),
-            message_callback_phone=args.get("customer_phone"),
-            message_target=args.get("target_staff"),
-            message_customer_name=args.get("customer_name"),
-            last_tool="take_message",
-        )
-        result = await tools.take_message(
-            str(args.get("message") or ""),
-            str(args.get("customer_phone") or ""),
-            args.get("customer_name"),
-            args.get("confirmed") is True,
-            args.get("target_staff"),
-        )
-        call_session.update_voice_state(
-            message_text=result.get("message"),
-            message_callback_phone=result.get("customer_phone"),
-            message_customer_name=result.get("customer_name"),
-            message_target=result.get("target_staff"),
-            confirmed=result.get("submitted") is True,
-            last_tool_ok=result.get("ok"),
-        )
-        if result.get("ok") is True and result.get("submitted") is True:
-            await params.result_callback(
-                result,
-                properties=FunctionCallResultProperties(run_llm=False),
-            )
-            target = str(result.get("target_staff") or "").strip()
-            spoken = (
-                f"I've left your message for {target}."
-                if target
-                else "I've left your message for the salon."
-            )
-            await call_session.append_transcript("assistant", spoken)
-            await params.llm.push_frame(TTSSpeakFrame(text=spoken, append_to_context=True))
-            return
-        await params.result_callback(result)
+    tool_handlers = create_voice_tool_handlers(call_session, tools)
+    get_salon_information_handler = tool_handlers["get_salon_information"]
+    check_availability_handler = tool_handlers["check_availability"]
+    book_appointment_handler = tool_handlers["book_appointment"]
+    find_appointments_handler = tool_handlers["find_appointments"]
+    reschedule_appointment_handler = tool_handlers["reschedule_appointment"]
+    cancel_appointment_handler = tool_handlers["cancel_appointment"]
+    take_message_handler = tool_handlers["take_message"]
 
     def _nullable_string_property(description: str | None = None) -> dict[str, Any]:
         """JSON Schema for an optional string that models may explicitly send as null."""
@@ -2006,7 +1602,8 @@ async def run_bot(
         logger.info("PRISM LINK voice client connected for tenant {}", tenant.slug)
         await call_session.start()
         greeting = build_voice_greeting(tenant)
-        await call_session.append_transcript("assistant", greeting)
+        # The assistant-turn-stopped handler persists this spoken greeting.
+        # Persisting it here as well creates a duplicate transcript entry.
         await worker.queue_frames([TTSSpeakFrame(text=greeting, append_to_context=True)])
 
     @user_aggregator.event_handler("on_user_turn_stopped")
@@ -2053,7 +1650,9 @@ async def run_bot(
             elif (
                 "resched" in lowered
                 or "move my appointment" in lowered
+                or "move my booking" in lowered
                 or "change my appointment" in lowered
+                or "change my booking" in lowered
             ):
                 call_session.update_voice_state(intent="reschedule", confirmed=False)
             elif call_session.voice_state.intent not in {
