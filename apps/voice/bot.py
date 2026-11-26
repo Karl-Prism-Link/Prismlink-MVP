@@ -274,27 +274,27 @@ async def run_bot(
         class PrismGroqLLMService(GroqLLMService):
             """Groq service with per-model TPM admission control for live voice."""
 
-            def route_current_turn(messages):
-                latest_user = next(
-                    (
-                        str(message.get("content") or "")
-                        for message in reversed(messages)
-                        if message.get("role") == "user"
-                    ),
-                    call_session.latest_caller_transcript or "",
-                )
-                return route_voice_turn(
-                    intent=call_session.voice_state.intent,
-                    service=call_session.voice_state.service,
-                    starts_at=call_session.voice_state.starts_at,
-                    last_tool=call_session.voice_state.last_tool,
-                    last_tool_ok=call_session.voice_state.last_tool_ok,
-                    confirmed=call_session.voice_state.confirmed,
-                    latest_user_text=latest_user,
-                    after_tool_result=bool(messages and messages[-1].get("role") == "tool"),
-                )
-
             async def get_chat_completions(self, context):
+                def route_current_turn(messages):
+                    latest_user = next(
+                        (
+                            str(message.get("content") or "")
+                            for message in reversed(messages)
+                            if message.get("role") == "user"
+                        ),
+                        call_session.latest_caller_transcript or "",
+                    )
+                    return route_voice_turn(
+                        intent=call_session.voice_state.intent,
+                        service=call_session.voice_state.service,
+                        starts_at=call_session.voice_state.starts_at,
+                        last_tool=call_session.voice_state.last_tool,
+                        last_tool_ok=call_session.voice_state.last_tool_ok,
+                        confirmed=call_session.voice_state.confirmed,
+                        latest_user_text=latest_user,
+                        after_tool_result=bool(messages and messages[-1].get("role") == "tool"),
+                    )
+
                 def request_params():
                     adapter = self.get_llm_adapter()
                     messages = context.get_messages()
