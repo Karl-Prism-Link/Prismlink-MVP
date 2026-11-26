@@ -38,8 +38,8 @@ from pipecat.workers.runner import WorkerRunner
 
 from apps.voice.prompt import (
     build_voice_greeting,
-    build_voice_reschedule_system_prompt,
     build_voice_system_prompt,
+    build_voice_system_prompt_for_turn,
 )
 from core.config import get_settings
 from database.repositories import TenantRepository
@@ -85,6 +85,7 @@ from services.voice.runtime_control import (
     has_explicit_appointment_management_request,
     has_explicit_new_intent,
     is_generic_booking_request,
+    is_local_tpm_budget_error,
     is_rate_limit_error,
     reset_stale_appointment_for_new_booking,
     select_voice_tool_schemas,
@@ -298,10 +299,14 @@ async def run_bot(
                     reschedule_turn = explicit_reschedule or (
                         call_session.voice_state.intent == "reschedule" and not explicit_new_intent
                     )
-                    system_instruction = (
-                        build_voice_reschedule_system_prompt(tenant)
-                        if reschedule_turn
-                        else self._settings.system_instruction
+                    # Enquiry turns expose only salon-information and safe message
+                    # tools. Use a compact, safety-complete prompt for that workflow;
+                    # retain the full prompt for booking and other workflows.
+                    system_instruction = build_voice_system_prompt_for_turn(
+                        tenant,
+                        intent=call_session.voice_state.intent,
+                        default_prompt=self._settings.system_instruction,
+                        reschedule=reschedule_turn,
                     )
                     return adapter.get_llm_invocation_params(
                         context,
@@ -1789,6 +1794,11 @@ async def run_bot(
             return routing_fallback_speech(
                 state.message_target, matched_staff=bool(state.message_target)
             )
+        if state.intent == "enquiry":
+            return (
+                "I don't have the salon's current offers confirmed. "
+                "Would you like me to ask the team to get back to you?"
+            )
         if state.intent == "message":
             if not state.message_text:
                 target_phrase = f" for {state.message_target}" if state.message_target else ""
@@ -1802,11 +1812,25 @@ async def run_bot(
     async def on_pipeline_error(_worker, frame):
         nonlocal rate_limit_fallback_spoken
         error_text = str(frame.error)
-        if not is_rate_limit_error(error_text) or rate_limit_fallback_spoken:
+        if rate_limit_fallback_spoken:
+            return
+        local_budget_rejection = is_local_tpm_budget_error(error_text)
+        if not local_budget_rejection and not is_rate_limit_error(error_text):
             return
         rate_limit_fallback_spoken = True
-        logger.warning("PRISM LINK Groq rate limit persisted after bounded provider retry")
+        if local_budget_rejection:
+            logger.warning(
+                "PRISM LINK Groq request rejected by local TPM admission guard; no provider request was sent"
+            )
+        else:
+            logger.warning("PRISM LINK Groq provider rate limit persisted after bounded retry")
         recovery = _rate_limit_recovery_speech()
+        call_session.set_resolution(
+            "failed_fallback",
+            "The voice response could not be completed because the LLM request was not admitted or the provider rate-limited it.",
+            follow_up_required=True,
+            follow_up_notes="The caller request was not completed; salon follow-up may be required.",
+        )
         await call_session.append_transcript("assistant", recovery)
         await worker.queue_frames([TTSSpeakFrame(text=recovery, append_to_context=True)])
 
