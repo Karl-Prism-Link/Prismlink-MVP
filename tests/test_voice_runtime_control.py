@@ -1,4 +1,5 @@
 from monitoring import (
+    GROQ_ESTIMATED_TOKENS,
     GROQ_RATE_LIMIT_TOKENS,
     parse_groq_rate_limit_headers,
     record_groq_error,
@@ -89,11 +90,15 @@ def test_groq_usage_metrics_record_actual_tokens_and_success_headers():
             "x-ratelimit-remaining-tokens": "7870",
             "x-ratelimit-reset-tokens": "4.2s",
         },
+        estimated_tokens=200,
     )
 
     assert snapshot["prompt_tokens"] == 123
     assert snapshot["completion_tokens"] == 7
     assert snapshot["total_tokens"] == 130
+    assert snapshot["estimated_tokens"] == 200
+    assert snapshot["estimate_ratio"] == 0.65
+    assert GROQ_ESTIMATED_TOKENS.labels(model_tier="fast")._value.get() >= 200
     assert GROQ_RATE_LIMIT_TOKENS.labels(model_tier="fast", kind="remaining")._value.get() == 7870
 
 

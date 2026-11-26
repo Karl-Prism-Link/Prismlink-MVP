@@ -45,6 +45,17 @@ GROQ_COMPLETION_TOKENS = Counter(
 GROQ_TOTAL_TOKENS = Counter(
     "groq_total_tokens_total", "Actual total tokens reported by Groq", ["model_tier"]
 )
+GROQ_ESTIMATED_TOKENS = Counter(
+    "groq_estimated_tokens_total",
+    "Locally estimated tokens admitted for Groq requests",
+    ["model_tier"],
+)
+GROQ_TOKEN_ESTIMATE_RATIO = Histogram(
+    "groq_token_estimate_ratio",
+    "Actual Groq total tokens divided by the local request token estimate",
+    ["model_tier"],
+    buckets=(0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 5),
+)
 GROQ_RATE_LIMIT_TOKENS = Gauge(
     "groq_rate_limit_tokens",
     "Latest Groq per-minute token limit and remaining budget from response headers",
@@ -173,7 +184,7 @@ def parse_groq_rate_limit_headers(headers):
     }
 
 
-def record_groq_response(model_tier, usage, headers):
+def record_groq_response(model_tier, usage, headers, estimated_tokens=None):
     """Record actual Groq usage and its latest rate-limit headers."""
     tier = model_tier if model_tier in {"fast", "reasoning"} else "other"
     GROQ_REQUESTS.labels(model_tier=tier, outcome="success").inc()
@@ -186,6 +197,13 @@ def record_groq_response(model_tier, usage, headers):
         GROQ_COMPLETION_TOKENS.labels(model_tier=tier).inc(max(0, int(completion)))
     if total is not None:
         GROQ_TOTAL_TOKENS.labels(model_tier=tier).inc(max(0, int(total)))
+    estimate_ratio = None
+    if estimated_tokens is not None and int(estimated_tokens) > 0:
+        estimate = int(estimated_tokens)
+        GROQ_ESTIMATED_TOKENS.labels(model_tier=tier).inc(estimate)
+        if total is not None:
+            estimate_ratio = max(0, int(total)) / estimate
+            GROQ_TOKEN_ESTIMATE_RATIO.labels(model_tier=tier).observe(estimate_ratio)
 
     snapshot = parse_groq_rate_limit_headers(headers)
     _record_groq_rate_limit_metrics(tier, snapshot)
@@ -193,6 +211,8 @@ def record_groq_response(model_tier, usage, headers):
         "prompt_tokens": prompt,
         "completion_tokens": completion,
         "total_tokens": total,
+        "estimated_tokens": estimated_tokens,
+        "estimate_ratio": estimate_ratio,
         **snapshot,
     }
 

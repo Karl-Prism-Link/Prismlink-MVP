@@ -402,16 +402,20 @@ async def run_bot(
                         raise
 
                     usage = getattr(completion, "usage", None)
-                    snapshot = record_groq_response(model_tier, usage, raw_response.headers)
+                    snapshot = record_groq_response(
+                        model_tier, usage, raw_response.headers, estimated_tokens=estimate
+                    )
                     logger.info(
                         "PRISM LINK Groq usage model_tier={} prompt_tokens={} "
-                        "completion_tokens={} total_tokens={} remaining_tokens={} "
+                        "completion_tokens={} total_tokens={} estimated_tokens={} estimate_ratio={} remaining_tokens={} "
                         "token_limit={} reset_tokens_seconds={} remaining_requests={} "
                         "request_limit={}",
                         model_tier,
                         snapshot.get("prompt_tokens"),
                         snapshot.get("completion_tokens"),
                         snapshot.get("total_tokens"),
+                        snapshot.get("estimated_tokens"),
+                        snapshot.get("estimate_ratio"),
                         snapshot.get("token_remaining"),
                         snapshot.get("token_limit"),
                         snapshot.get("token_reset_seconds"),

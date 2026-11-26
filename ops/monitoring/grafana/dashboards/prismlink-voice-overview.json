@@ -945,6 +945,56 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "Groq estimate accuracy",
+      "description": "Actual total tokens divided by the local reservation estimate. Above 1 means the estimator is underestimating provider usage; below 1 means the reservation is conservative.",
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model_tier) (rate(groq_total_tokens_total[5m])) / clamp_min(sum by (model_tier) (rate(groq_estimated_tokens_total[5m])), 0.001)",
+          "legendFormat": "{{model_tier}} actual / estimate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "last"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     }
   ]
 }
