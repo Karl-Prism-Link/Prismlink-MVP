@@ -204,16 +204,28 @@ def is_generic_booking_request(text: str) -> bool:
         return False
 
     patterns = (
-        r"\b(?:can|could|would)\s+i\s+(?:please\s+)?(?:book|make)\b",
+        r"\b(?:can|could|would)\s+i\s+(?:please\s+)?(?:book|make|schedule|reserve)\b",
         r"\b(?:book|make|need|want|get)\s+(?:me\s+)?(?:in\s+)?(?:an?\s+)?appointment\b",
         r"\bi\s+book\s+(?:in\s+)?(?:an?\s+)?appointment\b",
         r"\bi\s+(?:need|want|would\s+like)\s+(?:to\s+)?(?:book|make)\b",
-        r"\bi(?:'d|\s+would)\s+like\s+to\s+book\b",
+        r"\bi(?:'d|\s+would)\s+like\s+to\s+(?:book|schedule|reserve)\b",
+        r"\b(?:schedule|reserve)\s+(?:me\s+)?(?:an?\s+)?appointment\b",
         r"\bbook\s+(?:one|a|an)\s+(?:[\w'-]+(?:\s+[\w'-]+){0,2})",
         r"\bbook\s+me\s+in\b",
         r"\b(?:book|make)\s+(?:an?\s+)?booking\b",
     )
     return any(re.search(pattern, lowered, re.I) for pattern in patterns)
+
+
+def has_explicit_new_intent(text: str | None) -> bool:
+    """Detect a fresh non-reschedule intent that should supersede stale prompt state."""
+    return bool(
+        re.search(
+            r"\b(book|booking|schedule|reserve|cancel|message|hours|open|closing|close|"
+            r"price|cost|address|parking|services?|staff|speak to)\b",
+            " ".join(str(text or "").casefold().split()),
+        )
+    )
 
 
 def reset_stale_appointment_for_new_booking(call_session: Any, latest_user_text: str) -> bool:
@@ -226,7 +238,10 @@ def reset_stale_appointment_for_new_booking(call_session: Any, latest_user_text:
     state.appointment_id = None
     state.starts_at = None
     state.confirmed = False
-    call_session.clear_voice_state_fields("service", "staff", "caller_time_phrase")
+    call_session.clear_voice_state_fields(
+        "service", "staff", "caller_time_phrase", "customer_name", "customer_phone"
+    )
+    call_session.clear_booking_contact()
     call_session.clear_prepared_booking()
     call_session.clear_prepared_reschedule()
     call_session.clear_prepared_cancel()

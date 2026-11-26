@@ -82,6 +82,7 @@ from services.voice.runtime_control import (
     STATE_MARKER,
     RollingModelTokenBudget,
     compact_context_messages,
+    has_explicit_new_intent,
     is_generic_booking_request,
     is_rate_limit_error,
     reset_stale_appointment_for_new_booking,
@@ -291,13 +292,7 @@ async def run_bot(
                             latest_user_normalized,
                         )
                     )
-                    explicit_new_intent = bool(
-                        re.search(
-                            r"\b(book|booking|cancel|message|hours|open|closing|close|"
-                            r"price|cost|address|parking|services?|staff|speak to)\b",
-                            latest_user_normalized,
-                        )
-                    )
+                    explicit_new_intent = has_explicit_new_intent(latest_user_normalized)
                     reschedule_turn = explicit_reschedule or (
                         call_session.voice_state.intent == "reschedule" and not explicit_new_intent
                     )

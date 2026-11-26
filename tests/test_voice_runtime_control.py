@@ -3,6 +3,7 @@ from services.voice.runtime_control import (
     ModelCapacityExceeded,
     RollingModelTokenBudget,
     compact_context_messages,
+    has_explicit_new_intent,
     is_generic_booking_request,
     is_rate_limit_error,
     parse_retry_delay_seconds,
@@ -19,6 +20,13 @@ def test_retry_delay_respects_provider_wait_beyond_three_seconds():
     assert parse_retry_delay_seconds("Please try again in 15.1425s") == 15.1425
     assert parse_retry_delay_seconds("Please try again in 877.5ms") == 0.8775
     assert parse_retry_delay_seconds("Please try again in 90s") == 30.0
+
+
+def test_explicit_new_booking_intent_recognizes_schedule_and_reserve():
+    assert has_explicit_new_intent("I'd like to schedule an appointment") is True
+    assert has_explicit_new_intent("Can you reserve a time for me?") is True
+    assert has_explicit_new_intent("I need to book a haircut") is True
+    assert has_explicit_new_intent("I'd like to reschedule my appointment") is False
 
 
 def test_rate_limit_detection():
@@ -85,6 +93,8 @@ def test_generic_booking_request_covers_common_stt_variants():
         "Book me in please.",
         "I want to book.",
         "I need an appointment.",
+        "I'd like to schedule an appointment.",
+        "Can you reserve an appointment for me?",
     )
     for utterance in positives:
         assert is_generic_booking_request(utterance) is True, utterance

@@ -21,7 +21,8 @@ class FakeSession:
         self.voice_state = SimpleNamespace(
             intent="unknown",
             appointment_id=None,
-            customer_name=None,
+            customer_name="Previous Customer",
+            customer_phone="0211234567",
             booking_spelled_name="Sam Taylor",
             booking_phone_digits="0211234567",
         )
@@ -62,6 +63,12 @@ class FakeSession:
 
     def clear_prepared_reschedule(self):
         self._prepared_reschedule = False
+
+    def clear_booking_contact(self):
+        self.voice_state.customer_name = None
+        self.voice_state.customer_phone = None
+        self.voice_state.booking_spelled_name = None
+        self.voice_state.booking_phone_digits = None
 
     def prepare_cancel(self, _fingerprint):
         self._prepared_cancel = True
@@ -762,6 +769,10 @@ def test_new_booking_turn_clears_stale_management_appointment_selection():
     assert session.voice_state.staff is None
     assert session.voice_state.caller_time_phrase is None
     assert session.voice_state.confirmed is False
+    assert session.voice_state.customer_name is None
+    assert session.voice_state.customer_phone is None
+    assert session.voice_state.booking_spelled_name is None
+    assert session.voice_state.booking_phone_digits is None
     assert session.has_prepared_booking is False
     assert session.has_prepared_reschedule is False
     assert session.has_prepared_cancel is False
