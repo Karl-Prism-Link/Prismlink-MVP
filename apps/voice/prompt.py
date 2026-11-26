@@ -481,11 +481,12 @@ def build_voice_system_prompt_for_turn(
     intent: str,
     default_prompt: str,
     reschedule: bool = False,
+    routing_reason: str | None = None,
 ) -> str:
     """Choose a safety-complete prompt scoped to the active voice workflow."""
     if reschedule:
         return build_voice_reschedule_system_prompt(tenant)
-    if intent == "enquiry":
+    if intent == "enquiry" or routing_reason == "salon_enquiry":
         return build_voice_enquiry_system_prompt(tenant)
     return default_prompt
 
