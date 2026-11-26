@@ -176,13 +176,14 @@ def select_voice_tool_schemas(
 
 
 def is_rate_limit_error(error_text: str) -> bool:
+    """Identify provider rate limits, not local admission-guard rejections."""
     text = (error_text or "").lower()
-    return (
-        "429" in text
-        or "rate limit" in text
-        or "rate_limit_exceeded" in text
-        or "local_tpm_budget_exceeded" in text
-    )
+    return "429" in text or "rate limit" in text or "rate_limit_exceeded" in text
+
+
+def is_local_tpm_budget_error(error_text: str) -> bool:
+    """Identify requests rejected locally before reaching the LLM provider."""
+    return "local_tpm_budget_exceeded" in (error_text or "").lower()
 
 
 def is_generic_booking_request(text: str) -> bool:

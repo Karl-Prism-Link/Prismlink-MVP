@@ -13,6 +13,7 @@ from services.voice.runtime_control import (
     has_explicit_appointment_management_request,
     has_explicit_new_intent,
     is_generic_booking_request,
+    is_local_tpm_budget_error,
     is_rate_limit_error,
     parse_retry_delay_seconds,
     select_voice_tool_schemas,
@@ -295,13 +296,13 @@ def test_request_token_estimate_includes_completion_reservation():
     assert estimate >= 320
 
 
-def test_local_tpm_budget_error_is_classified_for_voice_fallback():
-    from services.voice.runtime_control import is_rate_limit_error
+def test_local_tpm_budget_rejection_is_distinct_from_provider_rate_limit():
+    local_error = "local_tpm_budget_exceeded: estimated request exceeds admission budget"
 
-    assert is_rate_limit_error(
-        "local_tpm_budget_exceeded: estimated request exceeds admission budget"
-    )
+    assert is_local_tpm_budget_error(local_error)
+    assert not is_rate_limit_error(local_error)
     assert is_rate_limit_error("429 rate_limit_exceeded from provider")
+    assert not is_local_tpm_budget_error("429 rate_limit_exceeded from provider")
     assert not is_rate_limit_error("invalid API key")
 
 

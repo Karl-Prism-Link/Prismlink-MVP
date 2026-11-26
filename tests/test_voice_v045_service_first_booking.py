@@ -34,3 +34,15 @@ def test_rate_limit_recovery_uses_booking_state_instead_of_repeat_loop():
             )
         ]
     )
+
+
+
+def test_enquiry_rate_limit_recovery_does_not_assume_the_question_was_about_offers():
+    source = (Path(__file__).parents[1] / "apps" / "voice" / "bot.py").read_text()
+    recovery = source[
+        source.index("def _rate_limit_recovery_speech") : source.index(
+            "async def finish_and_cancel"
+        )
+    ]
+    assert "I couldn't confirm that information just now." in recovery
+    assert "current offers" not in recovery

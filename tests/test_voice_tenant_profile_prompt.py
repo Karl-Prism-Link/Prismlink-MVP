@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
-from apps.voice.prompt import build_voice_greeting, build_voice_system_prompt
+from apps.voice.prompt import (
+    build_voice_enquiry_system_prompt,
+    build_voice_greeting,
+    build_voice_system_prompt,
+    build_voice_system_prompt_for_turn,
+)
 
 
 def _tenant(**overrides):
@@ -67,3 +72,43 @@ def test_live_greeting_has_safe_ai_disclosure_fallback():
     tenant = _tenant(ai_disclosure=None)
 
     assert "I'm the salon's AI receptionist." in build_voice_greeting(tenant)
+
+
+def test_enquiry_prompt_is_compact_and_preserves_tenant_truth_and_message_safety():
+    tenant = _tenant()
+    prompt = build_voice_enquiry_system_prompt(tenant)
+    full_prompt = build_voice_system_prompt(tenant)
+
+    assert len(prompt) < len(full_prompt) * 0.45
+    for required in (
+        "123 Queen Street, Auckland 1010",
+        "Currency: NZD",
+        "Prices include GST: yes",
+        "Never invent prices, services, promotions, discounts, policies or other salon facts.",
+        "Remember details already supplied in this call",
+        "For offers, deals or promotions, check configured information.",
+        "submit only after a fresh explicit yes using confirmed=true",
+    ):
+        assert required in prompt
+    assert "BOOKING" not in prompt
+    assert "RESCHEDULING" not in prompt
+
+
+def test_voice_prompt_selection_scopes_only_the_enquiry_workflow():
+    tenant = _tenant()
+    default_prompt = "full booking and safety prompt"
+
+    enquiry_prompt = build_voice_system_prompt_for_turn(
+        tenant, intent="enquiry", default_prompt=default_prompt
+    )
+    booking_prompt = build_voice_system_prompt_for_turn(
+        tenant, intent="booking", default_prompt=default_prompt
+    )
+    reschedule_prompt = build_voice_system_prompt_for_turn(
+        tenant, intent="enquiry", default_prompt=default_prompt, reschedule=True
+    )
+
+    assert enquiry_prompt == build_voice_enquiry_system_prompt(tenant)
+    assert booking_prompt == default_prompt
+    assert reschedule_prompt != enquiry_prompt
+    assert "RESCHEDULING WORKFLOW" in reschedule_prompt
