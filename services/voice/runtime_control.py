@@ -210,6 +210,8 @@ def is_generic_booking_request(text: str) -> bool:
         r"\bi\s+(?:need|want|would\s+like)\s+(?:to\s+)?(?:book|make)\b",
         r"\bi(?:'d|\s+would)\s+like\s+to\s+(?:book|schedule|reserve)\b",
         r"\b(?:schedule|reserve)\s+(?:me\s+)?(?:an?\s+)?appointment\b",
+        r"\b(?:can|could|would)\s+you\s+(?:please\s+)?reserve\s+(?:a\s+)?(?:time|slot)\b",
+        r"\bi(?:'d|\s+would|\s+want)\s+to\s+reserve\s+(?:a\s+)?(?:time|slot)\b",
         r"\bbook\s+(?:one|a|an)\s+(?:[\w'-]+(?:\s+[\w'-]+){0,2})",
         r"\bbook\s+me\s+in\b",
         r"\b(?:book|make)\s+(?:an?\s+)?booking\b",

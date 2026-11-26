@@ -805,6 +805,17 @@ def test_move_my_booking_scopes_management_tools_not_booking_tools():
     assert {"find_appointments", "check_availability", "reschedule_appointment"} <= names
     assert "book_appointment" not in names
 
+    change_request = "How much is a cut? Please change my booking to Friday."
+    changed = select_voice_tool_schemas(
+        tools,
+        intent="booking",
+        routing_reason="consequential_action_request",
+        latest_user_text=change_request,
+    )
+    changed_names = {tool["function"]["name"] for tool in changed}
+    assert "reschedule_appointment" in changed_names
+    assert "book_appointment" not in changed_names
+
 
 def test_new_booking_turn_clears_stale_management_appointment_selection():
     session = FakeSession()
@@ -877,3 +888,19 @@ def test_schedule_new_booking_clears_stale_management_appointment_selection():
     assert session.voice_state.service is None
     assert session.voice_state.customer_name is None
     assert session.voice_state.customer_phone is None
+
+
+def test_reserve_time_request_clears_stale_management_appointment_selection():
+    session = FakeSession()
+    session.voice_state.intent = "appointment_management"
+    session.voice_state.appointment_id = "apt-previous"
+    session.voice_state.starts_at = "2026-12-04T11:00:00+13:00"
+    session.voice_state.service = "Old Service"
+
+    reset = reset_stale_appointment_for_new_booking(session, "Can you reserve a time for me?")
+
+    assert reset is True
+    assert session.voice_state.intent == "booking"
+    assert session.voice_state.appointment_id is None
+    assert session.voice_state.starts_at is None
+    assert session.voice_state.service is None

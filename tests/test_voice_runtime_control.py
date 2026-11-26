@@ -98,6 +98,7 @@ def test_generic_booking_request_covers_common_stt_variants():
         "Can you reserve an appointment for me?",
         "I want to schedule an appointment for Friday.",
         "I need to reserve an appointment.",
+        "Can you reserve a time for me?",
     )
     for utterance in positives:
         assert is_generic_booking_request(utterance) is True, utterance
