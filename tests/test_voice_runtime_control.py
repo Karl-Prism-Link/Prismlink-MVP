@@ -3,6 +3,7 @@ from services.voice.runtime_control import (
     ModelCapacityExceeded,
     RollingModelTokenBudget,
     compact_context_messages,
+    has_explicit_appointment_management_request,
     has_explicit_new_intent,
     is_generic_booking_request,
     is_rate_limit_error,
@@ -95,9 +96,27 @@ def test_generic_booking_request_covers_common_stt_variants():
         "I need an appointment.",
         "I'd like to schedule an appointment.",
         "Can you reserve an appointment for me?",
+        "I want to schedule an appointment for Friday.",
+        "I need to reserve an appointment.",
     )
     for utterance in positives:
         assert is_generic_booking_request(utterance) is True, utterance
+
+
+def test_explicit_management_request_detects_mixed_price_and_reschedule_turns():
+    assert (
+        has_explicit_appointment_management_request(
+            "How much is a Men's Cut? I'd like to reschedule my appointment to Friday at 10am."
+        )
+        is True
+    )
+    assert (
+        has_explicit_appointment_management_request(
+            "How much is a cut? Please move my booking to Friday."
+        )
+        is True
+    )
+    assert has_explicit_appointment_management_request("How much is a cut?") is False
 
 
 def test_generic_booking_request_does_not_steal_management_intents():

@@ -82,6 +82,7 @@ from services.voice.runtime_control import (
     STATE_MARKER,
     RollingModelTokenBudget,
     compact_context_messages,
+    has_explicit_appointment_management_request,
     has_explicit_new_intent,
     is_generic_booking_request,
     is_rate_limit_error,
@@ -288,7 +289,8 @@ async def run_bot(
                     explicit_reschedule = bool(
                         re.search(
                             r"\b(reschedul(?:e|ing)|resched|another time|different time|"
-                            r"move (?:it|my appointment)|change (?:it|my appointment))\b",
+                            r"move (?:it|my (?:appointment|booking))|"
+                            r"change (?:it|my (?:appointment|booking)))\b",
                             latest_user_normalized,
                         )
                     )
@@ -981,6 +983,10 @@ async def run_bot(
         ) -> bool:
             """Resolve short service clarifications and preserved date/time without an LLM call."""
             state = call_session.voice_state
+            # A service name inside a mixed price + reschedule request is not a
+            # new-booking clarification. Let appointment-management routing handle it.
+            if has_explicit_appointment_management_request(latest_user):
+                return False
             if state.starts_at or call_session.has_prepared_booking:
                 return False
 
@@ -1611,7 +1617,9 @@ async def run_bot(
             elif (
                 "resched" in lowered
                 or "move my appointment" in lowered
+                or "move my booking" in lowered
                 or "change my appointment" in lowered
+                or "change my booking" in lowered
             ):
                 call_session.update_voice_state(intent="reschedule", confirmed=False)
             elif call_session.voice_state.intent not in {

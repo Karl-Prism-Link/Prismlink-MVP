@@ -145,15 +145,14 @@ def select_voice_tool_schemas(
         requested: set[str] = set()
         if re.search(
             r"\b(reschedul(?:e|ing)|resched|another time|different time|"
-            r"move (?:it|my appointment)|change (?:it|my appointment))\b",
+            r"move (?:it|my (?:appointment|booking))|"
+            r"change (?:it|my (?:appointment|booking)))\b",
             text,
         ):
             requested.add("reschedule")
         if re.search(r"\b(cancel|cancellation)\b", text):
             requested.add("cancel")
-        if re.search(r"\b(book|booking|schedule|reserve)\b", text) and not re.search(
-            r"\bresched", text
-        ):
+        if re.search(r"\b(?:book|schedule|reserve)\b", text):
             requested.add("booking")
         if len(requested) == 1:
             scope_intent = next(iter(requested))
@@ -205,6 +204,7 @@ def is_generic_booking_request(text: str) -> bool:
 
     patterns = (
         r"\b(?:can|could|would)\s+i\s+(?:please\s+)?(?:book|make|schedule|reserve)\b",
+        r"\bi\s+(?:need|want|would\s+like)\s+to\s+(?:book|make|schedule|reserve)\b",
         r"\b(?:book|make|need|want|get)\s+(?:me\s+)?(?:in\s+)?(?:an?\s+)?appointment\b",
         r"\bi\s+book\s+(?:in\s+)?(?:an?\s+)?appointment\b",
         r"\bi\s+(?:need|want|would\s+like)\s+(?:to\s+)?(?:book|make)\b",
@@ -215,6 +215,18 @@ def is_generic_booking_request(text: str) -> bool:
         r"\b(?:book|make)\s+(?:an?\s+)?booking\b",
     )
     return any(re.search(pattern, lowered, re.I) for pattern in patterns)
+
+
+def has_explicit_appointment_management_request(text: str | None) -> bool:
+    """Detect explicit cancellation/rescheduling wording, including mixed enquiry turns."""
+    return bool(
+        re.search(
+            r"\b(?:cancel(?:lation)?|reschedul(?:e|ing)|resched|"
+            r"move\s+(?:it|my\s+(?:appointment|booking)|the\s+(?:appointment|booking))|"
+            r"change\s+(?:it|my\s+(?:appointment|booking)|the\s+(?:appointment|booking)))\b",
+            " ".join(str(text or "").casefold().split()),
+        )
+    )
 
 
 def has_explicit_new_intent(text: str | None) -> bool:

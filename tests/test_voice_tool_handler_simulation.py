@@ -744,6 +744,68 @@ def test_current_pipecat_cancel_turn_overrides_stale_booking_tool_scope():
     } == names
 
 
+def test_mixed_price_and_reschedule_uses_management_tools_from_stale_booking_intent():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    latest_user = (
+        "How much is a Men's Cut? I'd like to reschedule my appointment to Friday at 10am."
+    )
+    decision = route_voice_turn(
+        intent="booking",
+        service="Men's Cut",
+        starts_at=None,
+        last_tool=None,
+        last_tool_ok=None,
+        confirmed=False,
+        latest_user_text=latest_user,
+    )
+    assert decision.reason == "consequential_action_request"
+    selected = select_voice_tool_schemas(
+        tools,
+        intent="booking",
+        routing_reason=decision.reason,
+        latest_user_text=latest_user,
+    )
+    names = {tool["function"]["name"] for tool in selected}
+    assert {"find_appointments", "check_availability", "reschedule_appointment"} <= names
+    assert "book_appointment" not in names
+
+
+def test_move_my_booking_scopes_management_tools_not_booking_tools():
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    latest_user = "How much is a cut? Please move my booking to Friday."
+    selected = select_voice_tool_schemas(
+        tools,
+        intent="booking",
+        routing_reason="consequential_action_request",
+        latest_user_text=latest_user,
+    )
+    names = {tool["function"]["name"] for tool in selected}
+    assert {"find_appointments", "check_availability", "reschedule_appointment"} <= names
+    assert "book_appointment" not in names
+
+
 def test_new_booking_turn_clears_stale_management_appointment_selection():
     session = FakeSession()
     session.voice_state.intent = "appointment_management"
@@ -792,3 +854,26 @@ def test_management_turn_does_not_clear_selected_appointment():
     assert session.voice_state.intent == "appointment_management"
     assert session.voice_state.appointment_id == "apt-previous"
     assert session.has_prepared_reschedule is True
+
+
+def test_schedule_new_booking_clears_stale_management_appointment_selection():
+    session = FakeSession()
+    session.voice_state.intent = "appointment_management"
+    session.voice_state.appointment_id = "apt-previous"
+    session.voice_state.starts_at = "2026-12-04T11:00:00+13:00"
+    session.voice_state.service = "Old Service"
+    session.voice_state.staff = "Old Staff Member"
+    session.voice_state.customer_name = "Previous Customer"
+    session.voice_state.customer_phone = "0211234567"
+
+    reset = reset_stale_appointment_for_new_booking(
+        session, "How much is a cut? I want to schedule an appointment for Friday."
+    )
+
+    assert reset is True
+    assert session.voice_state.intent == "booking"
+    assert session.voice_state.appointment_id is None
+    assert session.voice_state.starts_at is None
+    assert session.voice_state.service is None
+    assert session.voice_state.customer_name is None
+    assert session.voice_state.customer_phone is None
