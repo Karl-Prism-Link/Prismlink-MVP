@@ -274,6 +274,27 @@ async def run_bot(
         class PrismGroqLLMService(GroqLLMService):
             """Groq service with per-model TPM admission control for live voice."""
 
+            def route_current_turn(context):
+                messages = context.get_messages()
+                latest_user = next(
+                    (
+                        str(message.get("content") or "")
+                        for message in reversed(messages)
+                        if message.get("role") == "user"
+                    ),
+                    call_session.latest_caller_transcript or "",
+                )
+                return route_voice_turn(
+                    intent=call_session.voice_state.intent,
+                    service=call_session.voice_state.service,
+                    starts_at=call_session.voice_state.starts_at,
+                    last_tool=call_session.voice_state.last_tool,
+                    last_tool_ok=call_session.voice_state.last_tool_ok,
+                    confirmed=call_session.voice_state.confirmed,
+                    latest_user_text=latest_user,
+                    after_tool_result=bool(messages and messages[-1].get("role") == "tool"),
+                )
+
             async def get_chat_completions(self, context):
                 def request_params():
                     adapter = self.get_llm_adapter()
@@ -286,6 +307,7 @@ async def run_bot(
                         ),
                         call_session.latest_caller_transcript or "",
                     )
+                    decision = route_current_turn(context)
                     latest_user_normalized = " ".join(latest_user.casefold().split())
                     explicit_reschedule = bool(
                         re.search(
@@ -307,6 +329,7 @@ async def run_bot(
                         intent=call_session.voice_state.intent,
                         default_prompt=self._settings.system_instruction,
                         reschedule=reschedule_turn,
+                        routing_reason=decision.reason,
                     )
                     return adapter.get_llm_invocation_params(
                         context,
@@ -481,16 +504,7 @@ async def run_bot(
                     call_session.latest_caller_transcript or "",
                 )
                 after_tool_result = bool(messages and messages[-1].get("role") == "tool")
-                decision = route_voice_turn(
-                    intent=call_session.voice_state.intent,
-                    service=call_session.voice_state.service,
-                    starts_at=call_session.voice_state.starts_at,
-                    last_tool=call_session.voice_state.last_tool,
-                    last_tool_ok=call_session.voice_state.last_tool_ok,
-                    confirmed=call_session.voice_state.confirmed,
-                    latest_user_text=latest_user,
-                    after_tool_result=after_tool_result,
-                )
+                decision = route_current_turn(context)
                 if decision.reason == "consequential_action_request":
                     reset_stale_appointment_for_new_booking(call_session, latest_user)
                 model = (
@@ -1796,8 +1810,8 @@ async def run_bot(
             )
         if state.intent == "enquiry":
             return (
-                "I don't have the salon's current offers confirmed. "
-                "Would you like me to ask the team to get back to you?"
+                "I'm sorry, I couldn't confirm that information just now. "
+                "Would you like me to ask the salon team to get back to you?"
             )
         if state.intent == "message":
             if not state.message_text:
