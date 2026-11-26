@@ -8,7 +8,7 @@
 - [Voice runtime setup](VOICE_SETUP.md) — browser voice configuration and validation.
 - [Aurora integration setup](AURORA_SETUP.md) — SIP/RTP integration, environment, and live-call checks.
 - [Google Calendar OAuth setup](GOOGLE_OAUTH_SETUP.md) — tenant-specific local OAuth setup.
-- [OpenRouter setup](OPENROUTER_SETUP.md) — optional development LLM provider.
+- [Voice setup](VOICE_SETUP.md) — Groq-only voice LLM configuration.
 
 ## Marketing
 

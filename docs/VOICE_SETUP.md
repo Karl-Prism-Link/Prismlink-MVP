@@ -7,7 +7,7 @@ calls through Aurora.
 Browser microphone or Aurora SIP/RTP
   -> Pipecat voice pipeline
   -> Deepgram speech services
-  -> Groq or OpenRouter
+  -> Groq
   -> tenant-scoped PRISM LINK tools
   -> booking and Google Calendar
 ```
@@ -31,7 +31,7 @@ From the PRISM LINK project directory:
 pip install -e ".[dev,voice]"
 ```
 
-The `voice` extra installs Pipecat with Deepgram, Groq, OpenRouter, runner, Silero VAD, WebRTC,
+The `voice` extra installs Pipecat with Deepgram, Groq, runner, Silero VAD, WebRTC,
 and WebSocket support.
 
 ## 2. Configure private environment values
@@ -40,9 +40,10 @@ Add provider settings to the ignored `.env` file:
 
 ```env
 DEEPGRAM_API_KEY=YOUR_DEEPGRAM_KEY
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=YOUR_OPENROUTER_KEY
-OPENROUTER_MODEL=openrouter/free
+LLM_PROVIDER=groq
+GROQ_API_KEY=YOUR_GROQ_API_KEY
+GROQ_FAST_MODEL=openai/gpt-oss-20b
+GROQ_REASONING_MODEL=openai/gpt-oss-120b
 VOICE_TENANT_SLUG=your-existing-salon-slug
 VOICE_TEST_CALLER_NUMBER=0213333333
 DEEPGRAM_STT_MODEL=nova-3-general
@@ -50,7 +51,7 @@ DEEPGRAM_STT_LANGUAGE=en-NZ
 DEEPGRAM_TTS_VOICE=aura-2-helena-en
 ```
 
-Alternatively, set `LLM_PROVIDER=groq` and provide `GROQ_API_KEY`. Keep all provider keys and
+Keep all provider keys and
 shared Aurora control tokens out of source control, chat, logs, and screenshots.
 
 `VOICE_TENANT_SLUG` must match a salon already stored in the database. Browser testing uses this

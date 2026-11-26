@@ -23,21 +23,15 @@ async def voice_status(
     matches = bool(settings.voice_tenant_slug and settings.voice_tenant_slug == current_slug)
     deepgram = bool(settings.deepgram_api_key)
     groq = bool(settings.groq_api_key)
-    openrouter = bool(settings.openrouter_api_key)
     llm_provider = settings.llm_provider
-    llm_model = (
-        f"fast={settings.groq_fast_model}; reasoning={settings.groq_reasoning_model}"
-        if llm_provider == "groq"
-        else settings.openrouter_model
-    )
-    llm_configured = groq if llm_provider == "groq" else openrouter
+    llm_model = f"fast={settings.groq_fast_model}; reasoning={settings.groq_reasoning_model}"
+    llm_configured = groq
     return VoiceStatusOut(
         deepgram_configured=deepgram,
         llm_provider=llm_provider,
         llm_model=llm_model,
         llm_configured=llm_configured,
         groq_configured=groq,
-        openrouter_configured=openrouter,
         configured_tenant_slug=settings.voice_tenant_slug,
         current_tenant_slug=current_slug,
         tenant_matches=matches,

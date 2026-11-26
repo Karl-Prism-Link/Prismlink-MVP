@@ -120,6 +120,42 @@ def test_explicit_management_request_detects_mixed_price_and_reschedule_turns():
     assert has_explicit_appointment_management_request("How much is a cut?") is False
 
 
+def test_review_regression_move_my_booking_stays_in_management_scope():
+    utterance = "How much is a cut? Please move my booking to Friday."
+    assert has_explicit_appointment_management_request(utterance) is True
+    assert is_generic_booking_request(utterance) is False
+
+    tools = [
+        {"type": "function", "function": {"name": name}}
+        for name in (
+            "get_salon_information",
+            "check_availability",
+            "book_appointment",
+            "find_appointments",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "take_message",
+        )
+    ]
+    names = {
+        item["function"]["name"]
+        for item in select_voice_tool_schemas(
+            tools,
+            intent="booking",
+            routing_reason="consequential_action_request",
+            latest_user_text=utterance,
+        )
+    }
+    assert {"find_appointments", "check_availability", "reschedule_appointment"} <= names
+    assert "book_appointment" not in names
+
+
+def test_mixed_price_reschedule_is_not_a_new_booking_fastpath_request():
+    utterance = "How much is a Men's Cut? I'd like to reschedule my appointment to Friday at 10am."
+    assert has_explicit_appointment_management_request(utterance) is True
+    assert is_generic_booking_request(utterance) is False
+
+
 def test_generic_booking_request_does_not_steal_management_intents():
     negatives = (
         "I need to cancel my appointment.",

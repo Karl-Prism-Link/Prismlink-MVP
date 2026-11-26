@@ -851,6 +851,34 @@ def test_new_booking_turn_clears_stale_management_appointment_selection():
     assert session.has_prepared_cancel is False
 
 
+def test_schedule_and_reserve_booking_phrases_clear_stale_appointment_state():
+    for utterance in (
+        "How much is a cut? I'd like to schedule an appointment for Friday.",
+        "Can you reserve a time for me?",
+    ):
+        session = FakeSession()
+        session.voice_state.intent = "appointment_management"
+        session.voice_state.appointment_id = "apt-previous"
+        session.voice_state.starts_at = "2026-12-04T11:00:00+13:00"
+        session.voice_state.service = "Old Service"
+        session.voice_state.staff = "Old Staff"
+        session.voice_state.caller_time_phrase = "Thursday at eleven"
+        session.voice_state.customer_name = "Old Customer"
+        session.voice_state.customer_phone = "+64210000000"
+        session.prepare_booking("stale-booking", {"service": "Old Service"})
+
+        assert reset_stale_appointment_for_new_booking(session, utterance) is True
+        assert session.voice_state.intent == "booking"
+        assert session.voice_state.appointment_id is None
+        assert session.voice_state.starts_at is None
+        assert session.voice_state.service is None
+        assert session.voice_state.staff is None
+        assert session.voice_state.caller_time_phrase is None
+        assert session.voice_state.customer_name is None
+        assert session.voice_state.customer_phone is None
+        assert session.has_prepared_booking is False
+
+
 def test_management_turn_does_not_clear_selected_appointment():
     session = FakeSession()
     session.voice_state.intent = "appointment_management"

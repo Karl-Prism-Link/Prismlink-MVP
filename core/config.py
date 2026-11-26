@@ -28,11 +28,9 @@ class Settings(BaseSettings):
 
     deepgram_api_key: str | None = None
 
-    # Voice LLM provider. Groq remains the architecture default; OpenRouter is
-    # available as a development/testing provider so low/no-cost models can be used.
-    llm_provider: Literal["groq", "openrouter"] = "groq"
+    # Groq is the sole voice LLM provider.
+    llm_provider: Literal["groq"] = "groq"
     groq_api_key: str | None = None
-    openrouter_api_key: str | None = None
 
     # Live voice development runtime. VOICE_TENANT_SLUG selects a salon for
     # browser/WebRTC testing; SIP ingress will resolve tenants by called number.
@@ -50,7 +48,6 @@ class Settings(BaseSettings):
     groq_tokens_per_minute: int = 7_000
     groq_reasoning_effort: Literal["low", "medium", "high"] = "low"
     voice_context_turns: int = 4
-    openrouter_model: str = "openrouter/free"
     deepgram_stt_model: str = "nova-3-general"
     deepgram_stt_language: str = "en-NZ"
     deepgram_tts_voice: str = "aura-2-helena-en"

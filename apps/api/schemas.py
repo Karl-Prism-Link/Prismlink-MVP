@@ -322,7 +322,6 @@ class VoiceStatusOut(BaseModel):
     llm_model: str
     llm_configured: bool
     groq_configured: bool
-    openrouter_configured: bool
     configured_tenant_slug: str | None
     current_tenant_slug: str
     tenant_matches: bool

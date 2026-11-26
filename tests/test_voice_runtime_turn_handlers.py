@@ -102,6 +102,7 @@ async def _run(text, *, session=None, tools=None):
         "How much is a women's cut, and book me in Friday?",
         "How much is a women's cut? Please cancel my appointment.",
         "What's the price of a women's cut? I need to reschedule my appointment.",
+        "How much is a Men's Cut? I'd like to reschedule my appointment to Friday at 10am.",
         "How much does a men's cut cost, and leave a message for the salon.",
         "How much is a men's cut? I'd like to book one for Friday.",
         "How much is a men's cut? I'd like to book a men's cut for Friday.",

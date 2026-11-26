@@ -510,18 +510,6 @@ async def run_bot(
                 system_instruction=system_prompt,
             ),
         )
-    elif settings.llm_provider == "openrouter":
-        from pipecat.services.openrouter.llm import OpenRouterLLMService
-
-        openrouter_key = _required("OPENROUTER_API_KEY", settings.openrouter_api_key)
-        llm = OpenRouterLLMService(
-            api_key=openrouter_key,
-            settings=OpenRouterLLMService.Settings(
-                model=settings.openrouter_model,
-                temperature=0.2,
-                system_instruction=system_prompt,
-            ),
-        )
     else:
         raise RuntimeError(f"Unsupported LLM_PROVIDER={settings.llm_provider!r}.")
 
@@ -546,8 +534,6 @@ async def run_bot(
             settings.groq_reasoning_effort,
             settings.voice_context_turns,
         )
-    else:
-        logger.info("PRISM LINK OpenRouter model={}", settings.openrouter_model)
     tts = DeepgramTTSService(
         api_key=deepgram_key,
         settings=DeepgramTTSService.Settings(voice=settings.deepgram_tts_voice),

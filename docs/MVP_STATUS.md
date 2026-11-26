@@ -22,7 +22,7 @@ a real telephone call, two-way audio, and call cleanup still need verification.
 | Booking concurrency | Implemented and tested | Idempotency, conflict checks, and serialized writes prevent duplicate concurrent booking. |
 | Calls and messages | Implemented | Call logs, transcripts, summaries, outcomes, and tenant-scoped follow-up messages. |
 | Dashboard | Implemented | Salon setup, calendar status, bookings, calls, summaries, and message workflow. |
-| Browser/WebRTC voice | Implemented | Pipecat with Deepgram STT/TTS and Groq/OpenRouter tool calling. |
+| Browser/WebRTC voice | Implemented | Pipecat with Deepgram STT/TTS and Groq tool calling. |
 | Aurora SIP/RTP integration | Implemented; end-to-end validation in progress | API callback currently rejects a call event with HTTP 422 when its call ID is not a UUID. Verify the Aurora event contract, two-way PCMA/PCMU audio, booking, and teardown. |
 | Database migrations | Implemented | Alembic owns production schema changes; production startup does not auto-create tables. |
 | Redis call coordination | Planned | Redis is provisioned but is not yet the authoritative session/retry coordinator. |
