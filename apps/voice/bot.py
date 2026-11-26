@@ -135,6 +135,28 @@ def _required(name: str, value: str | None) -> str:
     return value
 
 
+def _route_voice_context_turn(messages: list[dict], call_session: LiveCallSession):
+    """Route a caller turn from the exact messages used to build its prompt."""
+    latest_user = next(
+        (
+            str(message.get("content") or "")
+            for message in reversed(messages)
+            if message.get("role") == "user"
+        ),
+        call_session.latest_caller_transcript or "",
+    )
+    return route_voice_turn(
+        intent=call_session.voice_state.intent,
+        service=call_session.voice_state.service,
+        starts_at=call_session.voice_state.starts_at,
+        last_tool=call_session.voice_state.last_tool,
+        last_tool_ok=call_session.voice_state.last_tool_ok,
+        confirmed=call_session.voice_state.confirmed,
+        latest_user_text=latest_user,
+        after_tool_result=bool(messages and messages[-1].get("role") == "tool"),
+    )
+
+
 class DuplicateSpeechSuppressor(FrameProcessor):
     """Drop junk, duplicate wording, and extra questions within one caller turn."""
 
@@ -275,26 +297,6 @@ async def run_bot(
             """Groq service with per-model TPM admission control for live voice."""
 
             async def get_chat_completions(self, context):
-                def route_current_turn(messages):
-                    latest_user = next(
-                        (
-                            str(message.get("content") or "")
-                            for message in reversed(messages)
-                            if message.get("role") == "user"
-                        ),
-                        call_session.latest_caller_transcript or "",
-                    )
-                    return route_voice_turn(
-                        intent=call_session.voice_state.intent,
-                        service=call_session.voice_state.service,
-                        starts_at=call_session.voice_state.starts_at,
-                        last_tool=call_session.voice_state.last_tool,
-                        last_tool_ok=call_session.voice_state.last_tool_ok,
-                        confirmed=call_session.voice_state.confirmed,
-                        latest_user_text=latest_user,
-                        after_tool_result=bool(messages and messages[-1].get("role") == "tool"),
-                    )
-
                 def request_params():
                     adapter = self.get_llm_adapter()
                     messages = context.get_messages()
@@ -306,7 +308,7 @@ async def run_bot(
                         ),
                         call_session.latest_caller_transcript or "",
                     )
-                    decision = route_current_turn(messages)
+                    decision = _route_voice_context_turn(messages, call_session)
                     latest_user_normalized = " ".join(latest_user.casefold().split())
                     explicit_reschedule = bool(
                         re.search(
@@ -503,7 +505,7 @@ async def run_bot(
                     call_session.latest_caller_transcript or "",
                 )
                 after_tool_result = bool(messages and messages[-1].get("role") == "tool")
-                decision = route_current_turn(messages)
+                decision = _route_voice_context_turn(messages, call_session)
                 if decision.reason == "consequential_action_request":
                     reset_stale_appointment_for_new_booking(call_session, latest_user)
                 model = (
