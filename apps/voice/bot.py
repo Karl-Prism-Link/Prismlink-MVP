@@ -274,8 +274,7 @@ async def run_bot(
         class PrismGroqLLMService(GroqLLMService):
             """Groq service with per-model TPM admission control for live voice."""
 
-            def route_current_turn(context):
-                messages = context.get_messages()
+            def route_current_turn(messages):
                 latest_user = next(
                     (
                         str(message.get("content") or "")
@@ -307,7 +306,7 @@ async def run_bot(
                         ),
                         call_session.latest_caller_transcript or "",
                     )
-                    decision = route_current_turn(context)
+                    decision = route_current_turn(messages)
                     latest_user_normalized = " ".join(latest_user.casefold().split())
                     explicit_reschedule = bool(
                         re.search(
@@ -504,7 +503,7 @@ async def run_bot(
                     call_session.latest_caller_transcript or "",
                 )
                 after_tool_result = bool(messages and messages[-1].get("role") == "tool")
-                decision = route_current_turn(context)
+                decision = route_current_turn(messages)
                 if decision.reason == "consequential_action_request":
                     reset_stale_appointment_for_new_booking(call_session, latest_user)
                 model = (
