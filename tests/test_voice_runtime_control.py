@@ -1,3 +1,9 @@
+from monitoring import (
+    GROQ_RATE_LIMIT_TOKENS,
+    parse_groq_rate_limit_headers,
+    record_groq_error,
+    record_groq_response,
+)
 from services.voice.runtime_control import (
     STATE_MARKER,
     ModelCapacityExceeded,
@@ -33,6 +39,79 @@ def test_explicit_new_booking_intent_recognizes_schedule_and_reserve():
 def test_rate_limit_detection():
     assert is_rate_limit_error("Error code: 429 - rate_limit_exceeded") is True
     assert is_rate_limit_error("calendar conflict") is False
+
+
+def test_groq_rate_limit_headers_parse_documented_tpm_and_rpd_values():
+    snapshot = parse_groq_rate_limit_headers(
+        {
+            "x-ratelimit-limit-tokens": "8000",
+            "x-ratelimit-remaining-tokens": "7123",
+            "x-ratelimit-reset-tokens": "2m59.56s",
+            "x-ratelimit-limit-requests": "1000",
+            "x-ratelimit-remaining-requests": "997",
+            "x-ratelimit-reset-requests": "3h12m",
+            "retry-after": "2",
+        }
+    )
+
+    assert snapshot["token_limit"] == 8000
+    assert snapshot["token_remaining"] == 7123
+    assert snapshot["token_reset_seconds"] == 179.56
+    assert snapshot["request_limit"] == 1000
+    assert snapshot["request_remaining"] == 997
+    assert snapshot["request_reset"] == "3h12m"
+    assert snapshot["retry_after"] == "2"
+
+
+def test_groq_rate_limit_header_parser_ignores_missing_and_malformed_values():
+    snapshot = parse_groq_rate_limit_headers(
+        {
+            "x-ratelimit-limit-tokens": "not-a-number",
+            "x-ratelimit-remaining-tokens": "-1",
+            "x-ratelimit-reset-tokens": "soon",
+        }
+    )
+
+    assert snapshot["token_limit"] is None
+    assert snapshot["token_remaining"] == 0
+    assert snapshot["token_reset_seconds"] is None
+    assert snapshot["request_limit"] is None
+
+
+def test_groq_usage_metrics_record_actual_tokens_and_success_headers():
+    from types import SimpleNamespace
+
+    snapshot = record_groq_response(
+        "fast",
+        SimpleNamespace(prompt_tokens=123, completion_tokens=7, total_tokens=130),
+        {
+            "x-ratelimit-limit-tokens": "8000",
+            "x-ratelimit-remaining-tokens": "7870",
+            "x-ratelimit-reset-tokens": "4.2s",
+        },
+    )
+
+    assert snapshot["prompt_tokens"] == 123
+    assert snapshot["completion_tokens"] == 7
+    assert snapshot["total_tokens"] == 130
+    assert GROQ_RATE_LIMIT_TOKENS.labels(model_tier="fast", kind="remaining")._value.get() == 7870
+
+
+def test_groq_429_error_headers_also_update_rate_limit_metrics():
+    snapshot = record_groq_error(
+        "reasoning",
+        429,
+        {
+            "x-ratelimit-limit-tokens": "8000",
+            "x-ratelimit-remaining-tokens": "0",
+            "x-ratelimit-reset-tokens": "6.5s",
+            "retry-after": "7",
+        },
+    )
+
+    assert snapshot["token_remaining"] == 0
+    assert snapshot["retry_after"] == "7"
+    assert GROQ_RATE_LIMIT_TOKENS.labels(model_tier="reasoning", kind="remaining")._value.get() == 0
 
 
 def test_compact_context_keeps_recent_user_turns_and_replaces_state():

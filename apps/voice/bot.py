@@ -44,7 +44,7 @@ from apps.voice.prompt import (
 from core.config import get_settings
 from database.repositories import TenantRepository
 from database.session import DBSession
-from monitoring import record_voice_turn_latency
+from monitoring import record_groq_error, record_groq_response, record_voice_turn_latency
 from services.service_names import configured_service_name_from_speech
 from services.voice.confirmation import handle_confirmation_turn
 from services.voice.contact import (
@@ -377,16 +377,59 @@ async def run_bot(
                 # full default system prompt, invalidating the compact-prompt
                 # estimate and recreating the TPM rejection this path prevents.
                 self._log_llm_response(context)
+                model_tier = "fast" if model == settings.groq_fast_model else "reasoning"
+
+                async def create_and_observe():
+                    try:
+                        raw_response = await self._client.chat.completions.with_raw_response.create(
+                            **params
+                        )
+                        completion = raw_response.parse()
+                    except Exception as exc:
+                        error_response = getattr(exc, "response", None)
+                        error_headers = getattr(error_response, "headers", None)
+                        status_code = getattr(exc, "status_code", None)
+                        snapshot = record_groq_error(model_tier, status_code, error_headers)
+                        logger.warning(
+                            "PRISM LINK Groq request failed model_tier={} status={} "
+                            "remaining_tokens={} reset_tokens={} retry_after={}",
+                            model_tier,
+                            status_code or "transport_error",
+                            snapshot.get("token_remaining"),
+                            snapshot.get("token_reset_seconds"),
+                            snapshot.get("retry_after"),
+                        )
+                        raise
+
+                    usage = getattr(completion, "usage", None)
+                    snapshot = record_groq_response(model_tier, usage, raw_response.headers)
+                    logger.info(
+                        "PRISM LINK Groq usage model_tier={} prompt_tokens={} "
+                        "completion_tokens={} total_tokens={} remaining_tokens={} "
+                        "token_limit={} reset_tokens_seconds={} remaining_requests={} "
+                        "request_limit={}",
+                        model_tier,
+                        snapshot.get("prompt_tokens"),
+                        snapshot.get("completion_tokens"),
+                        snapshot.get("total_tokens"),
+                        snapshot.get("token_remaining"),
+                        snapshot.get("token_limit"),
+                        snapshot.get("token_reset_seconds"),
+                        snapshot.get("request_remaining"),
+                        snapshot.get("request_limit"),
+                    )
+                    return completion
+
                 if self._retry_on_timeout:
                     try:
                         return await asyncio.wait_for(
-                            self._client.chat.completions.create(**params),
+                            create_and_observe(),
                             timeout=self._retry_timeout_secs,
                         )
                     except (TimeoutError, APITimeoutError):
                         logger.debug("{}: Retrying chat completion after provider timeout", self)
-                        return await self._client.chat.completions.create(**params)
-                return await self._client.chat.completions.create(**params)
+                        return await create_and_observe()
+                return await create_and_observe()
 
             def create_client(
                 self,

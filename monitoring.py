@@ -31,6 +31,35 @@ VOICE_TURN_LATENCY = Histogram(
     "Caller end-of-turn to first Pipecat response audio",
     buckets=(0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 6, 10),
 )
+GROQ_REQUESTS = Counter(
+    "groq_requests_total",
+    "Groq chat completion requests by bounded model tier and outcome",
+    ["model_tier", "outcome"],
+)
+GROQ_PROMPT_TOKENS = Counter(
+    "groq_prompt_tokens_total", "Actual prompt tokens reported by Groq", ["model_tier"]
+)
+GROQ_COMPLETION_TOKENS = Counter(
+    "groq_completion_tokens_total", "Actual completion tokens reported by Groq", ["model_tier"]
+)
+GROQ_TOTAL_TOKENS = Counter(
+    "groq_total_tokens_total", "Actual total tokens reported by Groq", ["model_tier"]
+)
+GROQ_RATE_LIMIT_TOKENS = Gauge(
+    "groq_rate_limit_tokens",
+    "Latest Groq per-minute token limit and remaining budget from response headers",
+    ["model_tier", "kind"],
+)
+GROQ_RATE_LIMIT_TOKEN_RESET = Gauge(
+    "groq_rate_limit_token_reset_seconds",
+    "Seconds until the Groq per-minute token limit resets",
+    ["model_tier"],
+)
+GROQ_RATE_LIMIT_REQUESTS = Gauge(
+    "groq_rate_limit_requests",
+    "Latest Groq daily request limit and remaining requests from response headers",
+    ["model_tier", "kind"],
+)
 # Booking metrics deliberately use a small, fixed label set. Never attach tenant IDs,
 # caller numbers, customer names, appointment IDs, or arbitrary exception text.
 BOOKING_ATTEMPTS = Counter("booking_attempts", "Confirmed appointment creation attempts")
@@ -108,6 +137,93 @@ def record_call_finished(outcome, duration_seconds):
         label = "other"
     CALL_OUTCOMES.labels(outcome=label).inc()
     STG_LATENCY.labels(stage="total_call").observe(max(0.0, float(duration_seconds)))
+
+
+def parse_groq_rate_limit_headers(headers):
+    """Extract only documented, non-sensitive Groq rate-limit response headers."""
+    headers = headers or {}
+
+    def integer(name):
+        value = headers.get(name)
+        try:
+            return max(0, int(value)) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def duration_seconds(value):
+        if not value:
+            return None
+        import re
+
+        text = str(value).strip().lower()
+        matches = re.findall(r"(\d+(?:\.\d+)?)(ms|s|m|h)", text)
+        if not matches or "".join(number + unit for number, unit in matches) != text:
+            return None
+        scales = {"ms": 0.001, "s": 1.0, "m": 60.0, "h": 3600.0}
+        return sum(float(number) * scales[unit] for number, unit in matches)
+
+    return {
+        "token_limit": integer("x-ratelimit-limit-tokens"),
+        "token_remaining": integer("x-ratelimit-remaining-tokens"),
+        "token_reset_seconds": duration_seconds(headers.get("x-ratelimit-reset-tokens")),
+        "request_limit": integer("x-ratelimit-limit-requests"),
+        "request_remaining": integer("x-ratelimit-remaining-requests"),
+        "request_reset": headers.get("x-ratelimit-reset-requests"),
+        "retry_after": headers.get("retry-after"),
+    }
+
+
+def record_groq_response(model_tier, usage, headers):
+    """Record actual Groq usage and its latest rate-limit headers."""
+    tier = model_tier if model_tier in {"fast", "reasoning"} else "other"
+    GROQ_REQUESTS.labels(model_tier=tier, outcome="success").inc()
+    prompt = getattr(usage, "prompt_tokens", None) if usage is not None else None
+    completion = getattr(usage, "completion_tokens", None) if usage is not None else None
+    total = getattr(usage, "total_tokens", None) if usage is not None else None
+    if prompt is not None:
+        GROQ_PROMPT_TOKENS.labels(model_tier=tier).inc(max(0, int(prompt)))
+    if completion is not None:
+        GROQ_COMPLETION_TOKENS.labels(model_tier=tier).inc(max(0, int(completion)))
+    if total is not None:
+        GROQ_TOTAL_TOKENS.labels(model_tier=tier).inc(max(0, int(total)))
+
+    snapshot = parse_groq_rate_limit_headers(headers)
+    _record_groq_rate_limit_metrics(tier, snapshot)
+    return {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "total_tokens": total,
+        **snapshot,
+    }
+
+
+def _record_groq_rate_limit_metrics(tier, snapshot):
+    for kind, key in (("limit", "token_limit"), ("remaining", "token_remaining")):
+        value = snapshot[key]
+        if value is not None:
+            GROQ_RATE_LIMIT_TOKENS.labels(model_tier=tier, kind=kind).set(value)
+    if snapshot["token_reset_seconds"] is not None:
+        GROQ_RATE_LIMIT_TOKEN_RESET.labels(model_tier=tier).set(snapshot["token_reset_seconds"])
+    for kind, key in (("limit", "request_limit"), ("remaining", "request_remaining")):
+        value = snapshot[key]
+        if value is not None:
+            GROQ_RATE_LIMIT_REQUESTS.labels(model_tier=tier, kind=kind).set(value)
+
+
+def record_groq_error(model_tier, status_code, headers=None):
+    """Record bounded Groq failures and any rate-limit metadata on the error response."""
+    tier = model_tier if model_tier in {"fast", "reasoning"} else "other"
+    outcome = (
+        "http_429"
+        if status_code == 429
+        else "transport_error"
+        if status_code is None
+        else "http_error"
+    )
+    GROQ_REQUESTS.labels(model_tier=tier, outcome=outcome).inc()
+    snapshot = parse_groq_rate_limit_headers(headers)
+    _record_groq_rate_limit_metrics(tier, snapshot)
+    return snapshot
 
 
 def record_voice_turn_latency(seconds):
